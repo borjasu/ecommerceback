@@ -5,11 +5,31 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { EstadoPedido, Pedido } from '../../entities';
+import { EstadoPedido, Pedido, PedidoAuditoria } from '../../entities';
 import { CambiarEstadoPedidoDto } from './dto/cambiar-estado-pedido.dto';
 import { CambiarEstadoPagoDto } from './dto/cambiar-estado-pago.dto';
 import { RegistrarEnvioDto } from './dto/registrar-envio.dto';
+import { ListarPedidosVendedorQueryDto } from './dto/listar-pedidos-vendedor-query.dto';
 import { ShippingService } from '../shipping/shipping.service';
+
+export interface PaginaDePedidos {
+  data: Pedido[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+// Máquina de estados simple: qué transiciones puede aplicar el vendedor vía
+// PATCH /:id/estado. "enviado" nunca aparece como destino aquí a propósito
+// (ver el bloqueo explícito más abajo) — solo se alcanza generando o
+// registrando una guía, así infoEnvio nunca queda vacío en un pedido que
+// dice estar enviado.
+const TRANSICIONES_VALIDAS: Record<EstadoPedido, EstadoPedido[]> = {
+  [EstadoPedido.PENDIENTE]: [EstadoPedido.CANCELADO],
+  [EstadoPedido.ENVIADO]: [EstadoPedido.ENTREGADO, EstadoPedido.CANCELADO],
+  [EstadoPedido.ENTREGADO]: [],
+  [EstadoPedido.CANCELADO]: [],
+};
 
 /**
  * Gestión de pedidos del lado vendedor: a diferencia de OrdersService (que
@@ -21,20 +41,55 @@ import { ShippingService } from '../shipping/shipping.service';
 export class VendorOrdersService {
   constructor(
     @InjectRepository(Pedido) private readonly pedidos: Repository<Pedido>,
+    @InjectRepository(PedidoAuditoria)
+    private readonly auditoria: Repository<PedidoAuditoria>,
     private readonly shippingService: ShippingService,
   ) {}
 
-  listarTodos(): Promise<Pedido[]> {
-    return this.pedidos.find({
-      relations: { items: { producto: true }, usuario: true },
-      order: { fecha: 'DESC' },
-    });
+  async listarTodos(
+    query: ListarPedidosVendedorQueryDto,
+  ): Promise<PaginaDePedidos> {
+    const qb = this.pedidos
+      .createQueryBuilder('pedido')
+      .leftJoinAndSelect('pedido.items', 'items')
+      .leftJoinAndSelect('items.producto', 'producto')
+      .leftJoinAndSelect('pedido.usuario', 'usuario')
+      .orderBy('pedido.fecha', 'DESC');
+
+    // Todo parametrizado vía query builder — nunca concatenación de strings
+    // en SQL (mitiga inyección SQL, OWASP A03).
+    if (query.estado) {
+      qb.andWhere('pedido.estado = :estado', { estado: query.estado });
+    }
+    if (query.estadoPago) {
+      qb.andWhere('pedido.estado_pago = :estadoPago', {
+        estadoPago: query.estadoPago,
+      });
+    }
+    if (query.desde) {
+      qb.andWhere('pedido.fecha >= :desde', { desde: query.desde });
+    }
+    if (query.hasta) {
+      qb.andWhere('pedido.fecha <= :hasta', { hasta: query.hasta });
+    }
+
+    const total = await qb.getCount();
+    const data = await qb
+      .skip((query.page - 1) * query.limit)
+      .take(query.limit)
+      .getMany();
+
+    return { data, total, page: query.page, limit: query.limit };
   }
 
   async obtenerUno(id: string): Promise<Pedido> {
     const pedido = await this.pedidos.findOne({
       where: { id },
-      relations: { items: { producto: true }, usuario: true },
+      relations: {
+        items: { producto: true },
+        usuario: true,
+        auditoria: true,
+      },
     });
     if (!pedido) {
       throw new NotFoundException('Pedido no encontrado.');
@@ -55,7 +110,14 @@ export class VendorOrdersService {
       );
     }
 
-    await this.obtenerOFallar(id);
+    const pedido = await this.obtenerOFallar(id);
+    const permitidas = TRANSICIONES_VALIDAS[pedido.estado] ?? [];
+    if (!permitidas.includes(dto.estado)) {
+      throw new BadRequestException(
+        `No se puede cambiar un pedido de "${pedido.estado}" a "${dto.estado}".`,
+      );
+    }
+
     await this.pedidos.update({ id }, { estado: dto.estado });
     return this.obtenerUno(id);
   }
@@ -63,9 +125,21 @@ export class VendorOrdersService {
   async actualizarEstadoPago(
     id: string,
     dto: CambiarEstadoPagoDto,
+    vendedorId: string,
   ): Promise<Pedido> {
-    await this.obtenerOFallar(id);
-    await this.pedidos.update({ id }, { estadoPago: dto.estadoPago });
+    const pedido = await this.obtenerOFallar(id);
+
+    if (pedido.estadoPago !== dto.estadoPago) {
+      await this.pedidos.update({ id }, { estadoPago: dto.estadoPago });
+      await this.auditoria.insert({
+        pedidoId: id,
+        campo: 'estadoPago',
+        valorAnterior: pedido.estadoPago,
+        valorNuevo: dto.estadoPago,
+        usuarioId: vendedorId,
+      });
+    }
+
     return this.obtenerUno(id);
   }
 
@@ -73,7 +147,9 @@ export class VendorOrdersService {
     id: string,
     dto: RegistrarEnvioDto,
   ): Promise<Pedido> {
-    await this.obtenerOFallar(id);
+    const pedido = await this.obtenerOFallar(id);
+    this.validarPuedeGenerarGuia(pedido);
+
     await this.pedidos.update(
       { id },
       {
@@ -99,16 +175,7 @@ export class VendorOrdersService {
     if (!pedido) {
       throw new NotFoundException('Pedido no encontrado.');
     }
-    if (pedido.estado === EstadoPedido.ENVIADO) {
-      throw new BadRequestException(
-        'Este pedido ya tiene una guía de envío generada.',
-      );
-    }
-    if (pedido.estado === EstadoPedido.CANCELADO) {
-      throw new BadRequestException(
-        'No se puede generar guía para un pedido cancelado.',
-      );
-    }
+    this.validarPuedeGenerarGuia(pedido);
 
     const infoEnvio = await this.shippingService.generarGuia(
       pedido,
@@ -124,6 +191,27 @@ export class VendorOrdersService {
     );
 
     return this.obtenerUno(id);
+  }
+
+  private validarPuedeGenerarGuia(pedido: Pedido): void {
+    // Idempotencia: si el pedido ya está "enviado", ya tiene guía (por
+    // /envio o /generar-guia) — no se genera una segunda, se devuelve un
+    // error claro en vez de duplicar.
+    if (pedido.estado === EstadoPedido.ENVIADO) {
+      throw new BadRequestException(
+        'Este pedido ya tiene una guía de envío generada.',
+      );
+    }
+    if (pedido.estado === EstadoPedido.CANCELADO) {
+      throw new BadRequestException(
+        'No se puede generar guía para un pedido cancelado.',
+      );
+    }
+    if (pedido.estado === EstadoPedido.ENTREGADO) {
+      throw new BadRequestException(
+        'Este pedido ya fue marcado como entregado.',
+      );
+    }
   }
 
   private async obtenerOFallar(id: string): Promise<Pedido> {

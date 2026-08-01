@@ -6,16 +6,20 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
-import { VendorOrdersService } from './vendor-orders.service';
+import { VendorOrdersService, PaginaDePedidos } from './vendor-orders.service';
 import { CambiarEstadoPedidoDto } from './dto/cambiar-estado-pedido.dto';
 import { CambiarEstadoPagoDto } from './dto/cambiar-estado-pago.dto';
 import { RegistrarEnvioDto } from './dto/registrar-envio.dto';
+import { ListarPedidosVendedorQueryDto } from './dto/listar-pedidos-vendedor-query.dto';
 import { Pedido, RolUsuario } from '../../entities';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import type { AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
 
 // Prefijo /vendedor/pedidos (no /pedidos) a propósito: evita chocar con
 // GET /pedidos y GET /pedidos/:id del OrdersController del comprador (mismo
@@ -28,8 +32,10 @@ export class VendorOrdersController {
   constructor(private readonly vendorOrdersService: VendorOrdersService) {}
 
   @Get()
-  listar(): Promise<Pedido[]> {
-    return this.vendorOrdersService.listarTodos();
+  listar(
+    @Query() query: ListarPedidosVendedorQueryDto,
+  ): Promise<PaginaDePedidos> {
+    return this.vendorOrdersService.listarTodos(query);
   }
 
   @Get(':id')
@@ -49,8 +55,9 @@ export class VendorOrdersController {
   actualizarEstadoPago(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: CambiarEstadoPagoDto,
+    @CurrentUser() vendedor: AuthenticatedUser,
   ): Promise<Pedido> {
-    return this.vendorOrdersService.actualizarEstadoPago(id, dto);
+    return this.vendorOrdersService.actualizarEstadoPago(id, dto, vendedor.id);
   }
 
   @Patch(':id/envio')

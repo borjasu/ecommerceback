@@ -9,6 +9,7 @@ import {
   Oferta,
   Pedido,
   ItemPedido,
+  PedidoAuditoria,
 } from '../entities';
 
 @Module({
@@ -27,6 +28,7 @@ import {
           Oferta,
           Pedido,
           ItemPedido,
+          PedidoAuditoria,
         ],
         migrations: ['dist/database/migrations/*.js'],
         migrationsRun: false,

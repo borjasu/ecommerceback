@@ -10,6 +10,7 @@ import {
 import { EstadoPago, EstadoPedido, MetodoPago } from './enums';
 import { Usuario } from './usuario.entity';
 import { ItemPedido } from './item-pedido.entity';
+import { PedidoAuditoria } from './pedido-auditoria.entity';
 import { DatosEnvio } from './datos-envio.embeddable';
 import { InfoEnvio } from './info-envio.embeddable';
 
@@ -37,6 +38,11 @@ export class Pedido {
 
   @OneToMany(() => ItemPedido, (item) => item.pedido, { cascade: true })
   items: ItemPedido[];
+
+  // Solo se carga cuando el vendedor pide el detalle de un pedido
+  // (VendorOrdersService.obtenerUno) — el lado comprador nunca la necesita.
+  @OneToMany(() => PedidoAuditoria, (auditoria) => auditoria.pedido)
+  auditoria: PedidoAuditoria[];
 
   @Column({
     type: 'decimal',

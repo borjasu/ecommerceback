@@ -9,6 +9,7 @@ import {
   Oferta,
   Pedido,
   ItemPedido,
+  PedidoAuditoria,
 } from '../entities';
 
 config();
@@ -29,6 +30,7 @@ export const AppDataSource = new DataSource({
     Oferta,
     Pedido,
     ItemPedido,
+    PedidoAuditoria,
   ],
   migrations: ['src/database/migrations/*.ts'],
   synchronize: false,

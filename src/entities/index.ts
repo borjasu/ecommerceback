@@ -5,6 +5,7 @@ export * from './favorito.entity';
 export * from './oferta.entity';
 export * from './pedido.entity';
 export * from './item-pedido.entity';
+export * from './pedido-auditoria.entity';
 export * from './datos-envio.embeddable';
 export * from './info-envio.embeddable';
 export * from './enums';
