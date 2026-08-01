@@ -5,9 +5,12 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { AplicaA, Oferta } from '../../entities';
+import { AplicaA, Oferta, Producto, TipoDescuento } from '../../entities';
 import { CrearOfertaDto } from './dto/crear-oferta.dto';
 import { ActualizarOfertaDto } from './dto/actualizar-oferta.dto';
+
+const PORCENTAJE_MAXIMO = 100;
+const MONTO_FIJO_MAXIMO = 100_000;
 
 /**
  * CRUD del lado vendedor sobre Oferta — separado de OffersService (que solo
@@ -17,6 +20,8 @@ import { ActualizarOfertaDto } from './dto/actualizar-oferta.dto';
 export class OffersAdminService {
   constructor(
     @InjectRepository(Oferta) private readonly ofertas: Repository<Oferta>,
+    @InjectRepository(Producto)
+    private readonly productos: Repository<Producto>,
   ) {}
 
   listar(): Promise<Oferta[]> {
@@ -25,6 +30,10 @@ export class OffersAdminService {
 
   async crear(dto: CrearOfertaDto): Promise<Oferta> {
     this.validarFechas(dto.fechaInicio, dto.fechaFin);
+    this.validarValor(dto.tipoDescuento, dto.valor);
+    if (dto.aplicaA === AplicaA.PRODUCTO) {
+      await this.verificarProductoExiste(dto.productoId!);
+    }
 
     const nueva = this.ofertas.create({
       nombre: dto.nombre,
@@ -49,7 +58,19 @@ export class OffersAdminService {
     const fechaFin = dto.fechaFin ?? oferta.fechaFin;
     this.validarFechas(fechaInicio, fechaFin);
 
+    // Se revalida con el valor final resuelto (dto ?? lo que ya tenía guardado),
+    // no solo con lo que venga en este PATCH — un PATCH parcial que solo cambie
+    // `valor` sin repetir `tipoDescuento` no debe poder saltarse el límite de 100%.
+    const tipoDescuentoFinal = dto.tipoDescuento ?? oferta.tipoDescuento;
+    const valorFinal = dto.valor ?? oferta.valor;
+    this.validarValor(tipoDescuentoFinal, valorFinal);
+
     const aplicaA = dto.aplicaA ?? oferta.aplicaA;
+    if (aplicaA === AplicaA.PRODUCTO) {
+      const productoIdFinal = dto.productoId ?? oferta.productoId;
+      await this.verificarProductoExiste(productoIdFinal!);
+    }
+
     await this.ofertas.update(
       { id },
       {
@@ -92,6 +113,30 @@ export class OffersAdminService {
     if (new Date(fechaFin) < new Date(fechaInicio)) {
       throw new BadRequestException(
         'La fecha de fin no puede ser anterior a la fecha de inicio.',
+      );
+    }
+  }
+
+  private validarValor(tipoDescuento: TipoDescuento, valor: number): void {
+    const maximo =
+      tipoDescuento === TipoDescuento.PORCENTAJE
+        ? PORCENTAJE_MAXIMO
+        : MONTO_FIJO_MAXIMO;
+
+    if (valor <= 0 || valor > maximo) {
+      throw new BadRequestException(
+        tipoDescuento === TipoDescuento.PORCENTAJE
+          ? `El descuento porcentual debe estar entre 0.01 y ${PORCENTAJE_MAXIMO}.`
+          : `El monto de descuento debe ser positivo y no exceder ${maximo}.`,
+      );
+    }
+  }
+
+  private async verificarProductoExiste(productoId: string): Promise<void> {
+    const existe = await this.productos.exists({ where: { id: productoId } });
+    if (!existe) {
+      throw new NotFoundException(
+        'El producto indicado para esta oferta no existe.',
       );
     }
   }

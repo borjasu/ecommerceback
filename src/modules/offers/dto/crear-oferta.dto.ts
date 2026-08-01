@@ -6,7 +6,6 @@ import {
   IsNumber,
   IsOptional,
   IsUUID,
-  Min,
   MinLength,
   ValidateIf,
 } from 'class-validator';
@@ -16,6 +15,7 @@ import {
   Categoria,
   TipoDescuento,
 } from '../../../entities';
+import { ValorOfertaValido } from '../validators/valor-oferta-valido.validator';
 
 export class CrearOfertaDto {
   @MinLength(2)
@@ -26,7 +26,7 @@ export class CrearOfertaDto {
 
   @Type(() => Number)
   @IsNumber()
-  @Min(0.01)
+  @ValorOfertaValido()
   valor: number;
 
   @IsEnum(AplicaA)
