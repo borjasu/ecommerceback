@@ -36,8 +36,16 @@ async function bootstrap() {
 
   // Whitelist explícita del frontend — nunca origin: '*', y credentials: true es
   // obligatorio para que la cookie HttpOnly del JWT viaje en requests cross-origin.
+  // Admite una lista separada por comas en CORS_ORIGIN (p. ej. localhost y 127.0.0.1
+  // del mismo dev server): el navegador los trata como orígenes distintos aunque
+  // apunten a la misma máquina, así que un match exacto de un solo string no basta.
+  const corsOrigins = config
+    .get<string>('CORS_ORIGIN')!
+    .split(',')
+    .map((origen) => origen.trim());
+
   app.enableCors({
-    origin: config.get<string>('CORS_ORIGIN'),
+    origin: corsOrigins,
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization'],
