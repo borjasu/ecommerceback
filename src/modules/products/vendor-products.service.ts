@@ -1,11 +1,7 @@
-import {
-  ConflictException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { ItemPedido, Producto } from '../../entities';
+import { Producto } from '../../entities';
 import { CrearProductoDto } from './dto/crear-producto.dto';
 import { ActualizarProductoDto } from './dto/actualizar-producto.dto';
 
@@ -21,8 +17,6 @@ export class VendorProductsService {
   constructor(
     @InjectRepository(Producto)
     private readonly productos: Repository<Producto>,
-    @InjectRepository(ItemPedido)
-    private readonly itemsPedido: Repository<ItemPedido>,
   ) {}
 
   async crear(dto: CrearProductoDto): Promise<Producto> {
@@ -56,18 +50,12 @@ export class VendorProductsService {
   async eliminar(id: string): Promise<void> {
     await this.obtenerOFallar(id);
 
-    // Un producto con pedidos históricos no se puede borrar (la FK de
-    // ItemPedido.producto_id es ON DELETE RESTRICT a propósito, para no perder
-    // el historial de ventas) — se valida antes con un mensaje claro, en vez de
-    // dejar que truene un error crudo de Postgres.
-    const enUso = await this.itemsPedido.exists({ where: { productoId: id } });
-    if (enUso) {
-      throw new ConflictException(
-        'No puedes eliminar este producto: ya tiene pedidos asociados. Puedes editarlo o quitarlo de destacados en su lugar.',
-      );
-    }
-
-    await this.productos.delete({ id });
+    // Borrado lógico: un producto con pedidos históricos no se puede borrar
+    // físicamente sin romper ese historial (ItemPedido lo referencia), así
+    // que "eliminar" del lado vendedor solo lo desactiva. Desaparece del
+    // catálogo público de inmediato mientras sigue intacto en la base de
+    // datos y en los pedidos ya existentes.
+    await this.productos.update({ id }, { activo: false });
   }
 
   private async obtenerOFallar(id: string): Promise<Producto> {

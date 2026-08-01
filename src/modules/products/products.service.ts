@@ -28,7 +28,9 @@ export class ProductsService {
   ) {}
 
   async listar(query: ListarProductosQueryDto): Promise<PaginaDeProductos> {
-    const qb = this.productos.createQueryBuilder('producto');
+    const qb = this.productos
+      .createQueryBuilder('producto')
+      .where('producto.activo = true');
 
     // Todo parametrizado vía query builder — nunca concatenación de strings en SQL
     // (mitiga inyección SQL, OWASP A03).
@@ -73,10 +75,11 @@ export class ProductsService {
 
     const candidatos = await this.productos
       .createQueryBuilder('producto')
-      .where('producto.nombre ILIKE :termino', { termino: `%${termino}%` })
-      .orWhere('producto.descripcion ILIKE :termino', {
-        termino: `%${termino}%`,
-      })
+      .where('producto.activo = true')
+      .andWhere(
+        '(producto.nombre ILIKE :termino OR producto.descripcion ILIKE :termino)',
+        { termino: `%${termino}%` },
+      )
       .getMany();
 
     return this.aplicarPrecioOrdenYPaginacion(
@@ -90,7 +93,9 @@ export class ProductsService {
   }
 
   async destacados(): Promise<ProductoConPrecio[]> {
-    const productos = await this.productos.find({ where: { destacado: true } });
+    const productos = await this.productos.find({
+      where: { destacado: true, activo: true },
+    });
     const ofertasVigentes = await this.offersService.obtenerOfertasVigentes();
     return productos.map((producto) =>
       aProductoConPrecio(
@@ -101,7 +106,9 @@ export class ProductsService {
   }
 
   async obtenerPorId(id: string): Promise<ProductoConPrecio> {
-    const producto = await this.productos.findOne({ where: { id } });
+    const producto = await this.productos.findOne({
+      where: { id, activo: true },
+    });
 
     if (!producto) {
       // 404 sin detalle interno — no distingue "id con formato inválido" de

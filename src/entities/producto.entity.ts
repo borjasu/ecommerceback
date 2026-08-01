@@ -69,4 +69,11 @@ export class Producto {
 
   @Column({ type: 'boolean', default: false })
   destacado: boolean;
+
+  // Borrado lógico: un producto con pedidos históricos (ItemPedido lo referencia)
+  // no se puede borrar físicamente sin romper ese historial, así que "eliminar"
+  // del lado vendedor solo pone esto en false. El catálogo público (ProductsService)
+  // filtra activo = true en todas sus consultas.
+  @Column({ type: 'boolean', default: true })
+  activo: boolean;
 }
