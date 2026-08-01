@@ -1,5 +1,13 @@
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
-import { Audiencia, Categoria, Color, Etiqueta, Talla } from './enums';
+import {
+  Column,
+  Entity,
+  JoinTable,
+  ManyToMany,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
+import { Audiencia, Categoria, Etiqueta } from './enums';
+import { Color } from './color.entity';
+import { Talla } from './talla.entity';
 
 @Entity('productos')
 export class Producto {
@@ -35,21 +43,23 @@ export class Producto {
   @Column({ type: 'enum', enum: Audiencia, enumName: 'audiencia_enum' })
   audiencia: Audiencia;
 
-  @Column({
-    type: 'enum',
-    enum: Color,
-    enumName: 'color_enum',
-    array: true,
-    name: 'colores_disponibles',
+  // Relación (no enum): coloresDisponibles/tallasDisponibles referencian los
+  // catálogos dinámicos Color/Talla vía tabla intermedia — nunca se cargan
+  // solas por lazy-loading de TypeORM, cada query que las necesita debe pedirlas
+  // explícito (relations: {...} o leftJoinAndSelect), ver products.service.ts.
+  @ManyToMany(() => Color)
+  @JoinTable({
+    name: 'producto_colores',
+    joinColumn: { name: 'producto_id', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'color_id', referencedColumnName: 'id' },
   })
   coloresDisponibles: Color[];
 
-  @Column({
-    type: 'enum',
-    enum: Talla,
-    enumName: 'talla_enum',
-    array: true,
-    name: 'tallas_disponibles',
+  @ManyToMany(() => Talla)
+  @JoinTable({
+    name: 'producto_tallas',
+    joinColumn: { name: 'producto_id', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'talla_id', referencedColumnName: 'id' },
   })
   tallasDisponibles: Talla[];
 

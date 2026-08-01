@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
+  ArrayUnique,
   IsArray,
   IsBoolean,
   IsEnum,
@@ -10,13 +11,7 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
-import {
-  Audiencia,
-  Categoria,
-  Color,
-  Etiqueta,
-  Talla,
-} from '../../../entities';
+import { Audiencia, Categoria, Etiqueta } from '../../../entities';
 
 export class CrearProductoDto {
   @IsString()
@@ -37,15 +32,21 @@ export class CrearProductoDto {
   @IsEnum(Audiencia)
   audiencia: Audiencia;
 
+  // Nombres del catálogo dinámico de colores/tallas (modules/catalogos), no un
+  // enum fijo: VendorProductsService valida contra la BD que cada nombre
+  // exista y esté activo antes de guardar (ColoresService/TallasService
+  // .resolverActivosPorNombre) — aquí solo se valida la forma del array.
   @IsArray()
   @ArrayMinSize(1)
-  @IsEnum(Color, { each: true })
-  coloresDisponibles: Color[];
+  @ArrayUnique()
+  @IsString({ each: true })
+  coloresDisponibles: string[];
 
   @IsArray()
   @ArrayMinSize(1)
-  @IsEnum(Talla, { each: true })
-  tallasDisponibles: Talla[];
+  @ArrayUnique()
+  @IsString({ each: true })
+  tallasDisponibles: string[];
 
   // No se valida con @IsUrl estricto: en desarrollo/mock puede venir un data URI
   // base64 (subida de imagen sin backend de almacenamiento todavía).

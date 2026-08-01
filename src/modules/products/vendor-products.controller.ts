@@ -13,7 +13,8 @@ import {
 import { VendorProductsService } from './vendor-products.service';
 import { CrearProductoDto } from './dto/crear-producto.dto';
 import { ActualizarProductoDto } from './dto/actualizar-producto.dto';
-import { Producto, RolUsuario } from '../../entities';
+import { ProductoPlano } from './producto-con-precio.mapper';
+import { RolUsuario } from '../../entities';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -29,7 +30,7 @@ export class VendorProductsController {
   constructor(private readonly vendorProductsService: VendorProductsService) {}
 
   @Post()
-  crear(@Body() dto: CrearProductoDto): Promise<Producto> {
+  crear(@Body() dto: CrearProductoDto): Promise<ProductoPlano> {
     return this.vendorProductsService.crear(dto);
   }
 
@@ -37,7 +38,7 @@ export class VendorProductsController {
   actualizar(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: ActualizarProductoDto,
-  ): Promise<Producto> {
+  ): Promise<ProductoPlano> {
     return this.vendorProductsService.actualizar(id, dto);
   }
 

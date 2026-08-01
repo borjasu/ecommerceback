@@ -6,10 +6,11 @@ import {
   IsInt,
   IsString,
   IsUUID,
+  MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
-import { Color, MetodoPago, Talla } from '../../../entities';
+import { MetodoPago } from '../../../entities';
 
 // Nota deliberada: este DTO NO tiene ningún campo de precio ni de costo de envío.
 // Es la primera línea de defensa contra manipulación de precios (OWASP A03/A08):
@@ -21,11 +22,16 @@ export class ItemPedidoDto {
   @IsUUID()
   productoId: string;
 
-  @IsEnum(Talla)
-  talla: Talla;
+  // Talla/color ya no son enums fijos (ver modules/catalogos) — OrdersService
+  // valida que el nombre exista, esté activo y pertenezca al catálogo de ESE
+  // producto (ver `producto.tallasDisponibles`/`coloresDisponibles`).
+  @IsString()
+  @MaxLength(20)
+  talla: string;
 
-  @IsEnum(Color)
-  color: Color;
+  @IsString()
+  @MaxLength(60)
+  color: string;
 
   @IsInt()
   @Min(1)

@@ -42,6 +42,7 @@ export class OrdersService {
     const productoIds = [...new Set(dto.items.map((item) => item.productoId))];
     const productosEncontrados = await this.productos.find({
       where: { id: In(productoIds) },
+      relations: { tallasDisponibles: true, coloresDisponibles: true },
     });
     const productosPorId = new Map(
       productosEncontrados.map((producto) => [producto.id, producto]),
@@ -55,15 +56,22 @@ export class OrdersService {
 
     // Talla/color: única validación de "disponibilidad" posible hoy — el modelo
     // actual no tiene control de stock por unidad. Si un producto no tiene esa
-    // talla/color en su catálogo, la línea se rechaza.
+    // talla/color en su catálogo (o el catálogo la desactivó desde que se
+    // armó el carrito), la línea se rechaza.
     for (const item of dto.items) {
       const producto = productosPorId.get(item.productoId)!;
-      if (!producto.tallasDisponibles.includes(item.talla)) {
+      const tallaValida = producto.tallasDisponibles.some(
+        (talla) => talla.nombre === item.talla && talla.activo,
+      );
+      const colorValido = producto.coloresDisponibles.some(
+        (color) => color.nombre === item.color && color.activo,
+      );
+      if (!tallaValida) {
         throw new BadRequestException(
           `"${producto.nombre}" no está disponible en talla ${item.talla}.`,
         );
       }
-      if (!producto.coloresDisponibles.includes(item.color)) {
+      if (!colorValido) {
         throw new BadRequestException(
           `"${producto.nombre}" no está disponible en color ${item.color}.`,
         );

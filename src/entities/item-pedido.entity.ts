@@ -5,7 +5,6 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { Color, Talla } from './enums';
 import { Pedido } from './pedido.entity';
 import { Producto } from './producto.entity';
 
@@ -29,11 +28,14 @@ export class ItemPedido {
   @Column({ type: 'uuid', name: 'producto_id' })
   productoId: string;
 
-  @Column({ type: 'enum', enum: Talla, enumName: 'talla_enum' })
-  talla: Talla;
+  // Snapshot de texto libre, NO una relación a Talla/Color: un pedido histórico
+  // debe conservar el nombre exacto que el cliente compró aunque ese color o
+  // talla se desactive (o incluso si su fila llegara a desaparecer del catálogo).
+  @Column({ type: 'varchar', length: 20 })
+  talla: string;
 
-  @Column({ type: 'enum', enum: Color, enumName: 'color_enum' })
-  color: Color;
+  @Column({ type: 'varchar', length: 60 })
+  color: string;
 
   @Column({ type: 'int' })
   cantidad: number;

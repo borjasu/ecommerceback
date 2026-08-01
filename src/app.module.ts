@@ -10,12 +10,14 @@ import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { ProductsModule } from './modules/products/products.module';
 import { OffersModule } from './modules/offers/offers.module';
+import { CatalogosModule } from './modules/catalogos/catalogos.module';
 import { AddressesModule } from './modules/addresses/addresses.module';
 import { FavoritesModule } from './modules/favorites/favorites.module';
 import { ShippingModule } from './modules/shipping/shipping.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { ReportsModule } from './modules/reports/reports.module';
+import { ContactModule } from './modules/contact/contact.module';
 
 @Module({
   imports: [
@@ -47,12 +49,21 @@ import { ReportsModule } from './modules/reports/reports.module';
             ttl: 60000,
             limit: 10,
           },
+          {
+            // POST /contacto es público y sin autenticación — el endpoint más
+            // expuesto a spam/abuso de todo el backend, límite mucho más
+            // estricto que el global (3 mensajes cada 10 min por IP).
+            name: 'contacto',
+            ttl: 600_000,
+            limit: 3,
+          },
         ],
       }),
     }),
     DatabaseModule,
     AuthModule,
     UsersModule,
+    CatalogosModule,
     OffersModule,
     ProductsModule,
     AddressesModule,
@@ -61,6 +72,7 @@ import { ReportsModule } from './modules/reports/reports.module';
     OrdersModule,
     PaymentsModule,
     ReportsModule,
+    ContactModule,
   ],
   controllers: [AppController],
   providers: [

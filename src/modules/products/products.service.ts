@@ -19,6 +19,15 @@ export interface PaginaDeProductos {
   limit: number;
 }
 
+// coloresDisponibles/tallasDisponibles son relaciones many-to-many (ver
+// entities/producto.entity.ts) — TypeORM nunca las carga solas por lazy
+// loading, así que toda consulta pública que vaya a devolver un Producto debe
+// pedirlas explícito con esto (o su equivalente leftJoinAndSelect en QueryBuilder).
+const RELACIONES_CATALOGO = {
+  coloresDisponibles: true,
+  tallasDisponibles: true,
+} as const;
+
 @Injectable()
 export class ProductsService {
   constructor(
@@ -30,6 +39,8 @@ export class ProductsService {
   async listar(query: ListarProductosQueryDto): Promise<PaginaDeProductos> {
     const qb = this.productos
       .createQueryBuilder('producto')
+      .leftJoinAndSelect('producto.coloresDisponibles', 'colores')
+      .leftJoinAndSelect('producto.tallasDisponibles', 'tallas')
       .where('producto.activo = true');
 
     // Todo parametrizado vía query builder — nunca concatenación de strings en SQL
@@ -44,15 +55,26 @@ export class ProductsService {
         categoria: query.categoria,
       });
     }
+    // innerJoin (sin ...AndSelect) con un alias PROPIO solo para filtrar: no
+    // reemplaza el leftJoinAndSelect de arriba, que sigue devolviendo TODOS los
+    // colores/tallas del producto — si reutilizáramos el mismo alias para
+    // filtrar y seleccionar a la vez, el WHERE recortaría también las filas
+    // seleccionadas y un producto con 3 colores se vería con solo 1 en la respuesta.
     if (query.talla) {
-      qb.andWhere(':talla = ANY(producto.tallasDisponibles)', {
-        talla: query.talla,
-      });
+      qb.innerJoin(
+        'producto.tallasDisponibles',
+        'tallaFiltro',
+        'tallaFiltro.nombre = :talla',
+        { talla: query.talla },
+      );
     }
     if (query.color) {
-      qb.andWhere(':color = ANY(producto.coloresDisponibles)', {
-        color: query.color,
-      });
+      qb.innerJoin(
+        'producto.coloresDisponibles',
+        'colorFiltro',
+        'colorFiltro.nombre = :color',
+        { color: query.color },
+      );
     }
 
     const candidatos = await qb.getMany();
@@ -75,6 +97,8 @@ export class ProductsService {
 
     const candidatos = await this.productos
       .createQueryBuilder('producto')
+      .leftJoinAndSelect('producto.coloresDisponibles', 'colores')
+      .leftJoinAndSelect('producto.tallasDisponibles', 'tallas')
       .where('producto.activo = true')
       .andWhere(
         '(producto.nombre ILIKE :termino OR producto.descripcion ILIKE :termino)',
@@ -95,6 +119,7 @@ export class ProductsService {
   async destacados(): Promise<ProductoConPrecio[]> {
     const productos = await this.productos.find({
       where: { destacado: true, activo: true },
+      relations: RELACIONES_CATALOGO,
     });
     const ofertasVigentes = await this.offersService.obtenerOfertasVigentes();
     return productos.map((producto) =>
@@ -108,6 +133,7 @@ export class ProductsService {
   async obtenerPorId(id: string): Promise<ProductoConPrecio> {
     const producto = await this.productos.findOne({
       where: { id, activo: true },
+      relations: RELACIONES_CATALOGO,
     });
 
     if (!producto) {
