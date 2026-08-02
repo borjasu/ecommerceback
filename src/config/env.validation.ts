@@ -24,6 +24,12 @@ export const envValidationSchema = Joi.object({
 
   CORS_ORIGIN: Joi.string().required(),
 
+  // URLs base propias (no de Mercado Pago) — se usan para armar back_urls y
+  // notification_url de la Preference: a dónde regresa el comprador y a dónde
+  // le avisa Mercado Pago del pago (ver PaymentsService.crearPreferencia).
+  FRONTEND_URL: Joi.string().uri().default('http://localhost:4200'),
+  BACKEND_URL: Joi.string().uri().default('http://localhost:3000'),
+
   MERCADOPAGO_ACCESS_TOKEN: Joi.string().required(),
   MERCADOPAGO_PUBLIC_KEY: Joi.string().required(),
   MERCADOPAGO_WEBHOOK_SECRET: Joi.string().required(),
