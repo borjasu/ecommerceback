@@ -13,7 +13,9 @@ import {
   ItemPedido,
   Pedido,
   Producto,
+  RolUsuario,
 } from '../../entities';
+import type { AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
 import { OffersService } from '../offers/offers.service';
 import { ShippingService } from '../shipping/shipping.service';
 import { CrearPedidoDto } from './dto/crear-pedido.dto';
@@ -177,6 +179,43 @@ export class OrdersService {
     }
 
     return pedido;
+  }
+
+  /**
+   * GET /pedidos/:id/rastreo — respaldo bajo demanda además del webhook de
+   * Skydropx (ver ShippingController.webhook): el vendedor ve cualquier
+   * pedido, el comprador solo el suyo (mismo criterio anti-IDOR que el resto
+   * de este servicio). Si el pedido no tiene guía generada todavía, o
+   * Skydropx no responde, se devuelve el trackingStatus que ya hubiera en BD
+   * (o null) en vez de fallar.
+   */
+  async obtenerRastreo(
+    id: string,
+    usuario: AuthenticatedUser,
+  ): Promise<{ trackingStatus: string | null }> {
+    const pedido = await this.pedidos.findOne({
+      where:
+        usuario.rol === RolUsuario.VENDEDOR ? { id } : { id, usuarioId: usuario.id },
+    });
+    if (!pedido) {
+      throw new NotFoundException('Pedido no encontrado.');
+    }
+
+    if (!pedido.infoEnvio.idEnvioSkydropx) {
+      return { trackingStatus: pedido.infoEnvio.trackingStatus };
+    }
+
+    const estadoActual = await this.shippingService.consultarRastreo(
+      pedido.infoEnvio.idEnvioSkydropx,
+    );
+    if (estadoActual && estadoActual !== pedido.infoEnvio.trackingStatus) {
+      await this.pedidos.update(
+        { id },
+        { infoEnvio: { ...pedido.infoEnvio, trackingStatus: estadoActual } },
+      );
+    }
+
+    return { trackingStatus: estadoActual ?? pedido.infoEnvio.trackingStatus };
   }
 
   private async generarNumeroPedidoUnico(): Promise<string> {

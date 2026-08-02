@@ -34,6 +34,11 @@ export const envValidationSchema = Joi.object({
     .valid('sandbox', 'production')
     .default('sandbox'),
   SKYDROPX_API_URL: Joi.string().uri().default('https://pro.skydropx.com'),
+  // Opcional: el mecanismo de firma del webhook de Skydropx no está confirmado
+  // contra documentación oficial (ver ShippingService.procesarWebhookRastreo)
+  // — si se configura, se usa para validar HMAC-SHA256; si no, el webhook se
+  // procesa igual mientras se confirma, con una advertencia en el log.
+  SKYDROPX_WEBHOOK_SECRET: Joi.string().optional().allow(''),
 
   // Dirección física fija de la tienda (origen de todos los envíos) — Frank Jeans, Puebla.
   STORE_ORIGIN_STREET: Joi.string().required(),
@@ -45,6 +50,13 @@ export const envValidationSchema = Joi.object({
   STORE_ORIGIN_NAME: Joi.string().required(),
   STORE_ORIGIN_PHONE: Joi.string().required(),
   STORE_ORIGIN_EMAIL: Joi.string().email().required(),
+
+  // Configuración de OPERACIÓN del vendedor (nunca preguntada al comprador):
+  // si Skydropx debe programar recolección a domicilio en el origen (true) o
+  // si Frank Jeans deja el paquete directamente en la paquetería (false).
+  // Fija por convención vía env var, igual que STORE_ORIGIN_* — no amerita
+  // tabla/CRUD propios para un solo valor booleano que casi nunca cambia.
+  ENVIO_REQUIERE_PICKUP: Joi.boolean().default(true),
 
   THROTTLE_TTL: Joi.number().default(60000),
   THROTTLE_LIMIT: Joi.number().default(100),

@@ -1,11 +1,14 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   ServiceUnavailableException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
+import { createHmac } from 'crypto';
 import { Direccion, Pedido, Producto } from '../../entities';
 import { CotizarEnvioDto } from './dto/cotizar-envio.dto';
 import {
@@ -13,6 +16,7 @@ import {
   CotizacionSkydropx,
   DireccionSkydropx,
   ParcelSkydropx,
+  RateSkydropx,
   SkydropxClientService,
 } from './skydropx-client.service';
 
@@ -23,6 +27,16 @@ import {
 const PESO_KG_POR_PRENDA_DEFAULT = 0.4;
 const DIMENSIONES_CM_DEFAULT = { length: 30, width: 25, height: 4 };
 const TIEMPO_ESTIMADO_DESCONOCIDO = 'No especificado';
+
+// Detecta, por nombre, la variante de una paquetería que implica que el
+// vendedor deja el paquete él mismo (sin que pasen a recogerlo al origen).
+// Verificado en vivo contra el sandbox de Skydropx (2026-08-02): el campo
+// ESTRUCTURADO `pickup` de la tarifa no distinguió de forma confiable este
+// caso concreto (Paquetexpress reportó pickup:false en AMBAS variantes,
+// "Nacional" y "Nacional Sin Recolección", pese a que el nombre sí implica
+// una diferencia operativa real) — el nombre del servicio es la señal que
+// sí funciona para este caso.
+const PATRON_SIN_RECOLECCION = /sin\s*recolecci[oó]n/i;
 
 const TTL_CACHE_COTIZACION_MS = 15 * 60 * 1000;
 
@@ -45,6 +59,7 @@ export interface InfoEnvioGenerada {
   numeroGuia: string | null;
   urlEtiqueta: string | null;
   urlRastreo: string | null;
+  trackingStatus: string | null;
 }
 
 interface EntradaCache {
@@ -54,6 +69,8 @@ interface EntradaCache {
 
 @Injectable()
 export class ShippingService {
+  private readonly logger = new Logger('ShippingService');
+
   // Cache en memoria del proceso. Suficiente para esta etapa (una sola instancia);
   // si el backend llega a correr en varias instancias/réplicas, esto debe moverse
   // a un store compartido (Redis) para que la revalidación funcione sin importar
@@ -66,6 +83,8 @@ export class ShippingService {
     private readonly direcciones: Repository<Direccion>,
     @InjectRepository(Producto)
     private readonly productos: Repository<Producto>,
+    @InjectRepository(Pedido)
+    private readonly pedidos: Repository<Pedido>,
     private readonly skydropxClient: SkydropxClientService,
     private readonly config: ConfigService,
   ) {}
@@ -120,7 +139,18 @@ export class ShippingService {
       destino,
       parcel,
     );
+    // Diagnóstico permanente (no un límite artificial): cuántas tarifas
+    // regresó Skydropx en crudo vs. cuántas quedaron utilizables después de
+    // filtrar por cobertura y colapsar variantes de recolección — para poder
+    // distinguir "el sandbox solo tiene N paqueterías para esta ruta" de "el
+    // código está recortando el arreglo" sin tener que adivinar.
+    this.logger.log(
+      `Cotización ${cotizacion.id}: Skydropx devolvió ${cotizacion.rates.length} tarifas en total (${cotizacion.rates.filter((r) => r.success).length} con cobertura).`,
+    );
     const opciones = this.mapearOpciones(cotizacion);
+    this.logger.log(
+      `Cotización ${cotizacion.id}: ${opciones.length} opciones finales tras colapsar variantes de recolección: ${opciones.map((o) => `${o.paqueteria} ${o.servicio}`).join(', ')}`,
+    );
 
     this.cacheCotizaciones.set(cotizacion.id, {
       opciones,
@@ -240,7 +270,91 @@ export class ShippingService {
       numeroGuia: envio.trackingNumber,
       urlEtiqueta: envio.labelUrl,
       urlRastreo: envio.trackingUrlProvider,
+      trackingStatus: envio.trackingStatus,
     };
+  }
+
+  /**
+   * Respaldo de rastreo bajo demanda (GET /pedidos/:id/rastreo): por si el
+   * webhook de Skydropx no llega o no está configurado en el sandbox, esto
+   * consulta directo contra Skydropx usando el id de envío ya guardado.
+   * Devuelve null si el pedido no tiene guía generada o si Skydropx no
+   * responde — en ambos casos el llamador debe conservar el estado anterior.
+   */
+  async consultarRastreo(idEnvioSkydropx: string): Promise<string | null> {
+    return this.skydropxClient.obtenerEstadoRastreo(idEnvioSkydropx);
+  }
+
+  /**
+   * POST /envios/webhook — receptor de eventos de rastreo de Skydropx.
+   *
+   * OJO, a diferencia del webhook de Mercado Pago (donde la firma HMAC y su
+   * formato SÍ están confirmados contra documentación oficial): no encontré
+   * documentación de Skydropx PRO confirmada con el mecanismo exacto de firma
+   * de este webhook (fuentes distintas se contradicen — una no menciona firma
+   * en absoluto, otra habla de HMAC-SHA512 pero para un producto/API distinto
+   * de Skydropx). Por eso la validación de firma aquí es OPCIONAL y de mejor
+   * esfuerzo: si se configura SKYDROPX_WEBHOOK_SECRET y llega un header de
+   * firma, se valida como HMAC-SHA256 del body; si no llega firma o no hay
+   * secreto configurado, se procesa igual (es solo texto para mostrar, no una
+   * acción sensible como aprobar un pago) pero se registra la advertencia.
+   * GET /pedidos/:id/rastreo (consulta bajo demanda) es el respaldo confiable
+   * mientras esto no se confirme con un evento real disparado desde el
+   * dashboard de Skydropx.
+   */
+  async procesarWebhookRastreo(
+    body: {
+      data?: {
+        id?: string;
+        tracking_number?: string;
+        status?: string;
+      };
+    },
+    firmaRecibida: string | undefined,
+  ): Promise<void> {
+    const secreto = this.config.get<string>('SKYDROPX_WEBHOOK_SECRET');
+    if (secreto) {
+      if (!firmaRecibida) {
+        this.logger.warn(
+          'Webhook de Skydropx recibido sin header de firma, con SKYDROPX_WEBHOOK_SECRET configurado — se procesa igual (mecanismo de firma no confirmado oficialmente), pero revisa esto.',
+        );
+      } else {
+        const firmaEsperada = createHmac('sha256', secreto)
+          .update(JSON.stringify(body))
+          .digest('hex');
+        if (firmaRecibida !== firmaEsperada) {
+          throw new UnauthorizedException('Firma de webhook inválida.');
+        }
+      }
+    } else {
+      this.logger.warn(
+        'Webhook de Skydropx recibido sin SKYDROPX_WEBHOOK_SECRET configurado — procesado sin verificar autenticidad.',
+      );
+    }
+
+    const idEnvio = body.data?.id;
+    const trackingNumber = body.data?.tracking_number;
+    const nuevoEstado = body.data?.status?.toLowerCase();
+    if (!nuevoEstado || (!idEnvio && !trackingNumber)) {
+      return;
+    }
+
+    const pedido = await this.pedidos.findOne({
+      where: idEnvio
+        ? { infoEnvio: { idEnvioSkydropx: idEnvio } }
+        : { infoEnvio: { numeroGuia: trackingNumber } },
+    });
+    if (!pedido) {
+      this.logger.warn(
+        `Webhook de Skydropx: no se encontró pedido para el envío ${idEnvio ?? trackingNumber}.`,
+      );
+      return;
+    }
+
+    await this.pedidos.update(
+      { id: pedido.id },
+      { infoEnvio: { ...pedido.infoEnvio, trackingStatus: nuevoEstado } },
+    );
   }
 
   private origenTienda(): DireccionSkydropx {
@@ -258,17 +372,70 @@ export class ShippingService {
     // Solo las paqueterías con cobertura real para esa ruta (success:true).
     // Las demás (status: no_coverage / not_applicable) no son errores, solo
     // significan que esa paquetería no cubre ese origen-destino.
-    return cotizacion.rates
-      .filter((rate) => rate.success && rate.total != null)
-      .map((rate) => ({
-        rateId: rate.id,
-        paqueteria: rate.provider_display_name,
-        servicio: rate.provider_service_name,
-        costo: Number(rate.total),
-        tiempoEstimado:
-          rate.days != null
-            ? `${rate.days} día(s)`
-            : TIEMPO_ESTIMADO_DESCONOCIDO,
-      }));
+    const conCobertura = cotizacion.rates.filter(
+      (rate) => rate.success && rate.total != null,
+    );
+
+    const requierePickup = this.config.get<boolean>('ENVIO_REQUIERE_PICKUP')!;
+    const seleccionadas = this.colapsarVariantesDeRecoleccion(
+      conCobertura,
+      requierePickup,
+    );
+
+    return seleccionadas.map((rate) => ({
+      rateId: rate.id,
+      paqueteria: rate.provider_display_name,
+      servicio: rate.provider_service_name,
+      costo: Number(rate.total),
+      tiempoEstimado:
+        rate.days != null
+          ? `${rate.days} día(s)`
+          : TIEMPO_ESTIMADO_DESCONOCIDO,
+    }));
+  }
+
+  /**
+   * Algunas paqueterías (verificado en vivo: Paquetexpress) ofrecen, para la
+   * MISMA ruta, dos tarifas que solo difieren en si implican recolección a
+   * domicilio en el origen o no ("Nacional" vs "Nacional Sin Recolección") —
+   * eso es una decisión de OPERACIÓN fija del vendedor (ENVIO_REQUIERE_PICKUP),
+   * nunca algo que el comprador deba elegir como si fuera una opción de envío
+   * real distinta. Solo se colapsa cuando una MISMA paquetería realmente
+   * ofrece ambas variantes (se agrupa por `provider_display_name`); una
+   * paquetería con una sola tarifa (sin ese patrón en el nombre, como
+   * Estafeta/DHL/FedEx/J&T en las pruebas contra el sandbox) se deja intacta,
+   * para no descartar opciones reales de envío por esta lógica.
+   */
+  private colapsarVariantesDeRecoleccion(
+    rates: RateSkydropx[],
+    requierePickup: boolean,
+  ): RateSkydropx[] {
+    const porPaqueteria = new Map<string, RateSkydropx[]>();
+    for (const rate of rates) {
+      const grupo = porPaqueteria.get(rate.provider_display_name) ?? [];
+      grupo.push(rate);
+      porPaqueteria.set(rate.provider_display_name, grupo);
+    }
+
+    const resultado: RateSkydropx[] = [];
+    for (const grupo of porPaqueteria.values()) {
+      const sinRecoleccion = grupo.filter((rate) =>
+        PATRON_SIN_RECOLECCION.test(rate.provider_service_name),
+      );
+      const conRecoleccion = grupo.filter(
+        (rate) => !PATRON_SIN_RECOLECCION.test(rate.provider_service_name),
+      );
+
+      if (sinRecoleccion.length > 0 && conRecoleccion.length > 0) {
+        // Esta paquetería sí ofrece ambas variantes: se queda solo con la
+        // que coincide con cómo opera realmente el vendedor.
+        resultado.push(...(requierePickup ? conRecoleccion : sinRecoleccion));
+      } else {
+        // Solo tiene una variante — nada que colapsar, se deja tal cual.
+        resultado.push(...grupo);
+      }
+    }
+
+    return resultado;
   }
 }

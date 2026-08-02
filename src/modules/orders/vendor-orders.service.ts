@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { EstadoPedido, Pedido, PedidoAuditoria } from '../../entities';
+import { EstadoPago, EstadoPedido, Pedido, PedidoAuditoria } from '../../entities';
 import { CambiarEstadoPedidoDto } from './dto/cambiar-estado-pedido.dto';
 import { CambiarEstadoPagoDto } from './dto/cambiar-estado-pago.dto';
 import { RegistrarEnvioDto } from './dto/registrar-envio.dto';
@@ -161,6 +161,10 @@ export class VendorOrdersService {
           urlEtiqueta: null,
           urlRastreo: dto.urlRastreo ?? null,
           fechaEnvio: new Date(),
+          // No hay id de envío en Skydropx que consultar (registro manual, no
+          // generado vía API) — "created" es el estado inicial razonable hasta
+          // que el vendedor lo actualice a mano o llegue un webhook real.
+          trackingStatus: 'created',
         },
       },
     );
@@ -194,6 +198,17 @@ export class VendorOrdersService {
   }
 
   private validarPuedeGenerarGuia(pedido: Pedido): void {
+    // Regla de negocio: nunca se envía (ni se genera una guía real, que
+    // cuesta dinero en Skydropx) un pedido sin pago confirmado. Hoy todo pago
+    // pasa por Mercado Pago (ver PaymentsService) — si en el futuro se agrega
+    // pago contra entrega, ese flujo necesitará su propia excepción explícita
+    // aquí (p. ej. por metodoPago), no quitar esta validación por defecto.
+    if (pedido.estadoPago !== EstadoPago.PAGADO) {
+      throw new BadRequestException(
+        'No se puede marcar como enviado un pedido sin pago confirmado.',
+      );
+    }
+
     // Idempotencia: si el pedido ya está "enviado", ya tiene guía (por
     // /envio o /generar-guia) — no se genera una segunda, se devuelve un
     // error claro en vez de duplicar.
