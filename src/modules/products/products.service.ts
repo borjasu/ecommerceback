@@ -19,6 +19,13 @@ export interface PaginaDeProductos {
   limit: number;
 }
 
+export interface FiltrosDisponibles {
+  tallas: string[];
+  colores: string[];
+  precioMin: number;
+  precioMax: number;
+}
+
 // coloresDisponibles/tallasDisponibles son relaciones many-to-many (ver
 // entities/producto.entity.ts) — TypeORM nunca las carga solas por lazy
 // loading, así que toda consulta pública que vaya a devolver un Producto debe
@@ -114,6 +121,48 @@ export class ProductsService {
       query.page,
       query.limit,
     );
+  }
+
+  /**
+   * Valores de talla/color y rango de precio que EXISTEN de verdad entre los
+   * productos activos ahora mismo — no la lista fija/completa del catálogo
+   * dinámico (modules/catalogos), que puede incluir tallas/colores sin ningún
+   * producto activo usándolos. El panel de filtros del cliente consume esto
+   * para no ofrecer una opción que de todos modos daría cero resultados.
+   */
+  async filtrosDisponibles(): Promise<FiltrosDisponibles> {
+    const tallas = await this.productos
+      .createQueryBuilder('producto')
+      .innerJoin('producto.tallasDisponibles', 'talla')
+      .where('producto.activo = true')
+      .distinct(true)
+      .select('talla.nombre', 'nombre')
+      .addSelect('talla.orden', 'orden')
+      .orderBy('talla.orden', 'ASC')
+      .getRawMany<{ nombre: string; orden: number }>();
+
+    const colores = await this.productos
+      .createQueryBuilder('producto')
+      .innerJoin('producto.coloresDisponibles', 'color')
+      .where('producto.activo = true')
+      .distinct(true)
+      .select('color.nombre', 'nombre')
+      .orderBy('color.nombre', 'ASC')
+      .getRawMany<{ nombre: string }>();
+
+    const rangoPrecio = await this.productos
+      .createQueryBuilder('producto')
+      .where('producto.activo = true')
+      .select('MIN(producto.precio)', 'min')
+      .addSelect('MAX(producto.precio)', 'max')
+      .getRawOne<{ min: string | null; max: string | null }>();
+
+    return {
+      tallas: tallas.map((t) => t.nombre),
+      colores: colores.map((c) => c.nombre),
+      precioMin: rangoPrecio?.min != null ? Number(rangoPrecio.min) : 0,
+      precioMax: rangoPrecio?.max != null ? Number(rangoPrecio.max) : 0,
+    };
   }
 
   async destacados(): Promise<ProductoConPrecio[]> {
