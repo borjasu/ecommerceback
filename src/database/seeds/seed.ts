@@ -17,7 +17,42 @@ import { AplicaA, TipoDescuento } from '../../entities/enums';
 
 const BCRYPT_COST_FACTOR = 12;
 
-const PRODUCTOS_SEED: Array<Omit<Producto, 'id'>> = [
+// Catálogo dinámico (ver entities/color.entity.ts y talla.entity.ts): se
+// siembra primero y los productos de abajo referencian estos nombres —
+// PRODUCTOS_SEED usa strings, no la entidad, porque las entidades reales con
+// id solo existen después de guardarlas (ver `seed()` más abajo).
+const COLORES_SEED: Array<Omit<Color, 'id'>> = [
+  { nombre: 'negro', valorHex: '#14110d', activo: true },
+  { nombre: 'azul', valorHex: '#2b3a55', activo: true },
+  { nombre: 'gris', valorHex: '#8a8a8a', activo: true },
+  { nombre: 'beige', valorHex: '#d9c9a3', activo: true },
+  { nombre: 'blanco', valorHex: '#f5f5f0', activo: true },
+  { nombre: 'cafe', valorHex: '#6b4226', activo: true },
+];
+
+const TALLAS_SEED: Array<Omit<Talla, 'id'>> = [
+  { nombre: 'S', orden: 1, activo: true },
+  { nombre: 'M', orden: 2, activo: true },
+  { nombre: 'L', orden: 3, activo: true },
+  { nombre: 'XL', orden: 4, activo: true },
+];
+
+interface ProductoSeedData {
+  sku: string;
+  nombre: string;
+  descripcion: string;
+  precio: number;
+  categoria: Categoria;
+  audiencia: Audiencia;
+  coloresNombres: string[];
+  tallasNombres: string[];
+  imagenUrl: string;
+  imagenes: string[];
+  etiqueta: Etiqueta | null;
+  destacado: boolean;
+}
+
+const PRODUCTOS_SEED: ProductoSeedData[] = [
   {
     sku: 'FJ-PAN-001',
     nombre: 'Pantalón de Vestir Slim',
@@ -26,8 +61,8 @@ const PRODUCTOS_SEED: Array<Omit<Producto, 'id'>> = [
     precio: 899,
     categoria: Categoria.PANTALON,
     audiencia: Audiencia.HOMBRE,
-    coloresDisponibles: [Color.NEGRO, Color.AZUL],
-    tallasDisponibles: [Talla.S, Talla.M, Talla.L, Talla.XL],
+    coloresNombres: ['negro', 'azul'],
+    tallasNombres: ['S', 'M', 'L', 'XL'],
     imagenUrl: 'https://picsum.photos/seed/fj1/400/500',
     imagenes: [
       'https://picsum.photos/seed/fj1/400/500',
@@ -44,8 +79,8 @@ const PRODUCTOS_SEED: Array<Omit<Producto, 'id'>> = [
     precio: 749,
     categoria: Categoria.PANTALON,
     audiencia: Audiencia.NINO,
-    coloresDisponibles: [Color.BEIGE],
-    tallasDisponibles: [Talla.M, Talla.L, Talla.XL],
+    coloresNombres: ['beige'],
+    tallasNombres: ['M', 'L', 'XL'],
     imagenUrl: 'https://picsum.photos/seed/fj2/400/500',
     imagenes: ['https://picsum.photos/seed/fj2/400/500'],
     etiqueta: Etiqueta.ESENCIAL,
@@ -59,8 +94,8 @@ const PRODUCTOS_SEED: Array<Omit<Producto, 'id'>> = [
     precio: 999,
     categoria: Categoria.PANTALON,
     audiencia: Audiencia.HOMBRE,
-    coloresDisponibles: [Color.GRIS, Color.NEGRO],
-    tallasDisponibles: [Talla.S, Talla.M, Talla.L],
+    coloresNombres: ['gris', 'negro'],
+    tallasNombres: ['S', 'M', 'L'],
     imagenUrl: 'https://picsum.photos/seed/fj3/400/500',
     imagenes: ['https://picsum.photos/seed/fj3/400/500'],
     etiqueta: null,
@@ -74,8 +109,8 @@ const PRODUCTOS_SEED: Array<Omit<Producto, 'id'>> = [
     precio: 349,
     categoria: Categoria.PLAYERA,
     audiencia: Audiencia.NINO,
-    coloresDisponibles: [Color.BLANCO],
-    tallasDisponibles: [Talla.S, Talla.M, Talla.L, Talla.XL],
+    coloresNombres: ['blanco'],
+    tallasNombres: ['S', 'M', 'L', 'XL'],
     imagenUrl: 'https://picsum.photos/seed/fj4/400/500',
     imagenes: ['https://picsum.photos/seed/fj4/400/500'],
     etiqueta: Etiqueta.ESENCIAL,
@@ -89,8 +124,8 @@ const PRODUCTOS_SEED: Array<Omit<Producto, 'id'>> = [
     precio: 429,
     categoria: Categoria.PLAYERA,
     audiencia: Audiencia.HOMBRE,
-    coloresDisponibles: [Color.AZUL],
-    tallasDisponibles: [Talla.M, Talla.L],
+    coloresNombres: ['azul'],
+    tallasNombres: ['M', 'L'],
     imagenUrl: 'https://picsum.photos/seed/fj5/400/500',
     imagenes: ['https://picsum.photos/seed/fj5/400/500'],
     etiqueta: Etiqueta.NUEVO,
@@ -104,8 +139,8 @@ const PRODUCTOS_SEED: Array<Omit<Producto, 'id'>> = [
     precio: 379,
     categoria: Categoria.PLAYERA,
     audiencia: Audiencia.NINO,
-    coloresDisponibles: [Color.NEGRO, Color.BLANCO],
-    tallasDisponibles: [Talla.S, Talla.M, Talla.L, Talla.XL],
+    coloresNombres: ['negro', 'blanco'],
+    tallasNombres: ['S', 'M', 'L', 'XL'],
     imagenUrl: 'https://picsum.photos/seed/fj6/400/500',
     imagenes: ['https://picsum.photos/seed/fj6/400/500'],
     etiqueta: null,
@@ -119,8 +154,8 @@ const PRODUCTOS_SEED: Array<Omit<Producto, 'id'>> = [
     precio: 1099,
     categoria: Categoria.CAMISA,
     audiencia: Audiencia.HOMBRE,
-    coloresDisponibles: [Color.BLANCO],
-    tallasDisponibles: [Talla.S, Talla.M, Talla.L],
+    coloresNombres: ['blanco'],
+    tallasNombres: ['S', 'M', 'L'],
     imagenUrl: 'https://picsum.photos/seed/fj7/400/500',
     imagenes: ['https://picsum.photos/seed/fj7/400/500'],
     etiqueta: Etiqueta.NUEVO,
@@ -134,8 +169,8 @@ const PRODUCTOS_SEED: Array<Omit<Producto, 'id'>> = [
     precio: 949,
     categoria: Categoria.CAMISA,
     audiencia: Audiencia.NINO,
-    coloresDisponibles: [Color.AZUL],
-    tallasDisponibles: [Talla.S, Talla.M, Talla.L, Talla.XL],
+    coloresNombres: ['azul'],
+    tallasNombres: ['S', 'M', 'L', 'XL'],
     imagenUrl: 'https://picsum.photos/seed/fj8/400/500',
     imagenes: ['https://picsum.photos/seed/fj8/400/500'],
     etiqueta: Etiqueta.ESENCIAL,
@@ -149,8 +184,8 @@ const PRODUCTOS_SEED: Array<Omit<Producto, 'id'>> = [
     precio: 899,
     categoria: Categoria.CAMISA,
     audiencia: Audiencia.HOMBRE,
-    coloresDisponibles: [Color.CAFE],
-    tallasDisponibles: [Talla.M, Talla.L, Talla.XL],
+    coloresNombres: ['cafe'],
+    tallasNombres: ['M', 'L', 'XL'],
     imagenUrl: 'https://picsum.photos/seed/fj9/400/500',
     imagenes: ['https://picsum.photos/seed/fj9/400/500'],
     etiqueta: null,
@@ -164,8 +199,8 @@ const PRODUCTOS_SEED: Array<Omit<Producto, 'id'>> = [
     precio: 549,
     categoria: Categoria.BERMUDA,
     audiencia: Audiencia.NINO,
-    coloresDisponibles: [Color.GRIS],
-    tallasDisponibles: [Talla.S, Talla.M, Talla.L, Talla.XL],
+    coloresNombres: ['gris'],
+    tallasNombres: ['S', 'M', 'L', 'XL'],
     imagenUrl: 'https://picsum.photos/seed/fj10/400/500',
     imagenes: ['https://picsum.photos/seed/fj10/400/500'],
     etiqueta: Etiqueta.NUEVO,
@@ -178,8 +213,8 @@ const PRODUCTOS_SEED: Array<Omit<Producto, 'id'>> = [
     precio: 629,
     categoria: Categoria.BERMUDA,
     audiencia: Audiencia.HOMBRE,
-    coloresDisponibles: [Color.AZUL],
-    tallasDisponibles: [Talla.M, Talla.L],
+    coloresNombres: ['azul'],
+    tallasNombres: ['M', 'L'],
     imagenUrl: 'https://picsum.photos/seed/fj11/400/500',
     imagenes: ['https://picsum.photos/seed/fj11/400/500'],
     etiqueta: Etiqueta.ESENCIAL,
@@ -193,14 +228,14 @@ const PRODUCTOS_SEED: Array<Omit<Producto, 'id'>> = [
     precio: 679,
     categoria: Categoria.BERMUDA,
     audiencia: Audiencia.NINO,
-    coloresDisponibles: [Color.BEIGE, Color.GRIS],
-    tallasDisponibles: [Talla.S, Talla.M, Talla.L, Talla.XL],
+    coloresNombres: ['beige', 'gris'],
+    tallasNombres: ['S', 'M', 'L', 'XL'],
     imagenUrl: 'https://picsum.photos/seed/fj12/400/500',
     imagenes: ['https://picsum.photos/seed/fj12/400/500'],
     etiqueta: null,
     destacado: false,
   },
-] as Array<Omit<Producto, 'id'>>;
+];
 
 async function seed(): Promise<void> {
   await AppDataSource.initialize();
@@ -210,6 +245,38 @@ async function seed(): Promise<void> {
   const productosRepo = AppDataSource.getRepository(Producto);
   const ofertasRepo = AppDataSource.getRepository(Oferta);
   const direccionesRepo = AppDataSource.getRepository(Direccion);
+  const coloresRepo = AppDataSource.getRepository(Color);
+  const tallasRepo = AppDataSource.getRepository(Talla);
+
+  // ---------- Catálogo dinámico: colores y tallas ----------
+  for (const datos of COLORES_SEED) {
+    const existente = await coloresRepo.findOne({
+      where: { nombre: datos.nombre },
+    });
+    if (!existente) {
+      await coloresRepo.save(coloresRepo.create(datos));
+      console.log(`Color creado: ${datos.nombre}`);
+    }
+  }
+
+  for (const datos of TALLAS_SEED) {
+    const existente = await tallasRepo.findOne({
+      where: { nombre: datos.nombre },
+    });
+    if (!existente) {
+      await tallasRepo.save(tallasRepo.create(datos));
+      console.log(`Talla creada: ${datos.nombre}`);
+    }
+  }
+
+  const todosLosColores = await coloresRepo.find();
+  const todasLasTallas = await tallasRepo.find();
+  const colorPorNombre = new Map(
+    todosLosColores.map((color) => [color.nombre, color]),
+  );
+  const tallaPorNombre = new Map(
+    todasLasTallas.map((talla) => [talla.nombre, talla]),
+  );
 
   // ---------- Vendedor (único vendedor del sistema) ----------
   let vendedor = await usuariosRepo.findOne({
@@ -276,7 +343,18 @@ async function seed(): Promise<void> {
   for (const datos of PRODUCTOS_SEED) {
     let producto = await productosRepo.findOne({ where: { sku: datos.sku } });
     if (!producto) {
-      producto = await productosRepo.save(productosRepo.create(datos));
+      const { coloresNombres, tallasNombres, ...resto } = datos;
+      producto = await productosRepo.save(
+        productosRepo.create({
+          ...resto,
+          coloresDisponibles: coloresNombres.map(
+            (nombre) => colorPorNombre.get(nombre)!,
+          ),
+          tallasDisponibles: tallasNombres.map(
+            (nombre) => tallaPorNombre.get(nombre)!,
+          ),
+        }),
+      );
       console.log(`Producto creado: ${datos.sku} — ${datos.nombre}`);
     }
     productosCreados.push(producto);

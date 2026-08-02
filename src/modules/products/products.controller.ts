@@ -1,5 +1,9 @@
 import { Controller, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
-import { ProductsService, PaginaDeProductos } from './products.service';
+import {
+  ProductsService,
+  PaginaDeProductos,
+  FiltrosDisponibles,
+} from './products.service';
 import {
   ListarProductosQueryDto,
   BuscarProductosQueryDto,
@@ -22,6 +26,14 @@ export class ProductsController {
   @Get('destacados')
   destacados(): Promise<ProductoConPrecio[]> {
     return this.productsService.destacados();
+  }
+
+  // Rutas literales ('buscar', 'destacados', 'filtros-disponibles') SIEMPRE
+  // antes de ':id' — si quedara después, Nest la matchearía como si
+  // "filtros-disponibles" fuera un id (y ParseUUIDPipe la rechazaría con 400).
+  @Get('filtros-disponibles')
+  filtrosDisponibles(): Promise<FiltrosDisponibles> {
+    return this.productsService.filtrosDisponibles();
   }
 
   @Get(':id')

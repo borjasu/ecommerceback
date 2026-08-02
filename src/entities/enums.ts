@@ -15,25 +15,10 @@ export enum Audiencia {
   NINO = 'nino',
 }
 
-export enum Talla {
-  S = 'S',
-  M = 'M',
-  L = 'L',
-  XL = 'XL',
-}
-
-// Catálogo base de colores. TODO(vendedor-side): cuando el módulo admin necesite
-// colores personalizados por vendedor (el frontend ya lo soporta como string libre),
-// esto debe migrar de enum a una tabla `Color` con FK, igual que se documentó como
-// riesgo de diseño en el inventario de modelos previo a este backend.
-export enum Color {
-  NEGRO = 'negro',
-  AZUL = 'azul',
-  GRIS = 'gris',
-  BEIGE = 'beige',
-  BLANCO = 'blanco',
-  CAFE = 'cafe',
-}
+// Talla y Color YA NO son enums fijos: son catálogos dinámicos con CRUD propio
+// y borrado lógico (ver entities/talla.entity.ts y entities/color.entity.ts,
+// y el módulo modules/catalogos). Un Producto los referencia por relación
+// many-to-many; un ItemPedido guarda el nombre como snapshot de texto libre.
 
 export enum Etiqueta {
   NUEVO = 'NUEVO',

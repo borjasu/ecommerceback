@@ -13,6 +13,7 @@ import { ItemPedido } from './item-pedido.entity';
 import { PedidoAuditoria } from './pedido-auditoria.entity';
 import { DatosEnvio } from './datos-envio.embeddable';
 import { InfoEnvio } from './info-envio.embeddable';
+import { DatosFiscales } from './datos-fiscales.embeddable';
 
 const decimalTransformer = {
   to: (value: number) => value,
@@ -103,6 +104,21 @@ export class Pedido {
 
   @Column(() => InfoEnvio, { prefix: false })
   infoEnvio: InfoEnvio;
+
+  @Column(() => DatosFiscales, { prefix: false })
+  datosFiscales: DatosFiscales;
+
+  // Distingue un "cancelado" que el vendedor decidió a mano (false) de uno
+  // que el job de limpieza (OrdersCleanupService) canceló solo porque nunca
+  // se pagó (true) — sin esto no habría forma de separar ambos casos, ya que
+  // los dos terminan con el mismo estado ('cancelado'). El panel de vendedor
+  // no muestra estos últimos en la vista principal por default.
+  @Column({
+    type: 'boolean',
+    name: 'cancelado_por_abandono',
+    default: false,
+  })
+  canceladoPorAbandono: boolean;
 
   @CreateDateColumn({ name: 'fecha' })
   fecha: Date;

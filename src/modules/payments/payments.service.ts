@@ -11,17 +11,27 @@ import { Repository } from 'typeorm';
 import {
   MercadoPagoConfig,
   Payment,
+  Preference,
   InvalidWebhookSignatureError,
   WebhookSignatureValidator,
 } from 'mercadopago';
 import { EstadoPago, Pedido, Usuario } from '../../entities';
 import { ProcesarPagoDto } from './dto/procesar-pago.dto';
+import { CrearPreferenciaDto } from './dto/crear-preferencia.dto';
 
 export type ResultadoPago = 'aprobado' | 'pendiente' | 'rechazado';
 
 export interface RespuestaProcesarPago {
   resultado: ResultadoPago;
 }
+
+export interface RespuestaPreferencia {
+  preferenceId: string;
+  amount: number;
+}
+
+// Margen de tolerancia al comparar montos en punto flotante (centavos).
+const TOLERANCIA_MONTO = 0.01;
 
 function aResultadoPago(estadoMercadoPago: string | undefined): ResultadoPago {
   if (estadoMercadoPago === 'approved') {
@@ -37,6 +47,7 @@ function aResultadoPago(estadoMercadoPago: string | undefined): ResultadoPago {
 export class PaymentsService {
   private readonly logger = new Logger('PaymentsService');
   private readonly paymentClient: Payment;
+  private readonly preferenceClient: Preference;
 
   constructor(
     @InjectRepository(Pedido) private readonly pedidos: Repository<Pedido>,
@@ -48,6 +59,82 @@ export class PaymentsService {
       options: { timeout: 10000 },
     });
     this.paymentClient = new Payment(mpConfig);
+    this.preferenceClient = new Preference(mpConfig);
+  }
+
+  /**
+   * Arma la Preference que inicializa el Payment Brick del frontend (flujo
+   * oficial de Checkout Bricks: https://www.mercadopago.com.mx/developers).
+   * Todos los unit_price salen de ItemPedido.precioUnitario — el snapshot que
+   * OrdersService YA calculó con la oferta vigente aplicada al crear el
+   * pedido — nunca se recalculan ni se toma nada del frontend aquí.
+   */
+  async crearPreferencia(
+    usuarioId: string,
+    dto: CrearPreferenciaDto,
+  ): Promise<RespuestaPreferencia> {
+    const pedido = await this.pedidos.findOne({
+      // where: {id, usuarioId} en una sola consulta (no "buscar y comparar
+      // dueño" después): el pedido de otro usuario da 404, igual que en
+      // OrdersService/AddressesService — mitiga IDOR.
+      where: { id: dto.pedidoId, usuarioId },
+      relations: { items: { producto: true } },
+    });
+    if (!pedido) {
+      throw new NotFoundException('Pedido no encontrado.');
+    }
+    if (pedido.estadoPago === EstadoPago.PAGADO) {
+      throw new BadRequestException('Este pedido ya está pagado.');
+    }
+
+    const usuario = await this.usuarios.findOne({ where: { id: usuarioId } });
+    const frontendUrl = this.config.get<string>('FRONTEND_URL')!;
+
+    const preferencia = await this.preferenceClient.create({
+      body: {
+        items: pedido.items.map((item) => ({
+          id: item.productoId,
+          title: item.producto.nombre,
+          quantity: item.cantidad,
+          unit_price: item.precioUnitario,
+          currency_id: 'MXN',
+        })),
+        shipments: {
+          cost: pedido.costoEnvio,
+          mode: 'not_specified',
+        },
+        payer: {
+          name: usuario?.nombre,
+          email: usuario?.email,
+        },
+        // numeroPedido, no pedido.id: es lo que procesarWebhook y
+        // verificarYActualizarPorPaymentId ya usan para correlacionar un pago
+        // de Mercado Pago con su Pedido — mismo criterio en toda la app.
+        external_reference: pedido.numeroPedido,
+        back_urls: {
+          success: `${frontendUrl}/cuenta/pedidos`,
+          pending: `${frontendUrl}/cuenta/pedidos`,
+          failure: `${frontendUrl}/checkout`,
+        },
+        notification_url: `${this.config.get<string>('BACKEND_URL')}/pagos/webhook`,
+      },
+      requestOptions: { idempotencyKey: pedido.id },
+    });
+
+    if (!preferencia.id) {
+      this.logger.error(
+        `Mercado Pago no devolvió un id de preferencia para el pedido ${pedido.numeroPedido}. Respuesta completa: ${JSON.stringify(preferencia)}`,
+      );
+      throw new BadRequestException(
+        'Mercado Pago no devolvió una preferencia válida.',
+      );
+    }
+
+    this.logger.log(
+      `Preferencia ${preferencia.id} creada para el pedido ${pedido.numeroPedido} (monto: ${pedido.total}).`,
+    );
+
+    return { preferenceId: preferencia.id, amount: pedido.total };
   }
 
   async procesar(
@@ -67,24 +154,66 @@ export class PaymentsService {
       return { resultado: 'aprobado' };
     }
 
-    // transaction_amount SIEMPRE del total ya calculado y guardado en el Pedido
-    // (OrdersService ya lo recalculó server-side al crearlo) — nunca un monto que
-    // venga del frontend en este endpoint, el DTO ni siquiera tiene ese campo.
+    // Defensa en profundidad: el Payment Brick ya arma su formData con el
+    // `amount` con el que se inicializó (el que ESTE backend le dio en
+    // /pagos/crear-preferencia), pero si alguien lo manipula del lado
+    // cliente antes de enviarlo, se rechaza aquí ANTES de llamar a Mercado
+    // Pago — nunca se le manda a MP un monto que no coincida con el pedido.
+    if (Math.abs(dto.transaction_amount - pedido.total) > TOLERANCIA_MONTO) {
+      this.logger.warn(
+        `Pedido ${pedido.numeroPedido}: transaction_amount del formData (${dto.transaction_amount}) no coincide con el total real (${pedido.total}) — rechazado antes de llamar a Mercado Pago.`,
+      );
+      throw new BadRequestException(
+        'El monto del pago no coincide con el total del pedido.',
+      );
+    }
+
     const pagoCreado = await this.paymentClient.create({
       body: {
+        // El propio pedido.total, no dto.transaction_amount — ya se validó
+        // arriba que coinciden, pero la fuente de verdad para el cobro real
+        // sigue siendo la base de datos, nunca el body del request.
         transaction_amount: pedido.total,
         token: dto.token,
         installments: dto.installments ?? 1,
-        payment_method_id: dto.paymentMethodId,
+        payment_method_id: dto.payment_method_id,
+        issuer_id: dto.issuer_id ? Number(dto.issuer_id) : undefined,
         external_reference: pedido.numeroPedido,
         description: `Frank Jeans — Pedido ${pedido.numeroPedido}`,
-        payer: { email: (await this.emailDelUsuario(usuarioId)) ?? undefined },
+        payer: {
+          email: dto.payer.email,
+          identification: dto.payer.identification,
+          first_name: dto.payer.first_name,
+          last_name: dto.payer.last_name,
+        },
       },
       requestOptions: { idempotencyKey: pedido.id },
     });
 
     if (!pagoCreado.id) {
       throw new BadRequestException('Mercado Pago no devolvió un pago válido.');
+    }
+
+    // Log completo de lo que Mercado Pago realmente respondió — para poder
+    // diagnosticar un resultado inesperado (p. ej. "pendiente" cuando se
+    // esperaba "aprobado") sin adivinar cuál rama del código se ejecutó.
+    this.logger.log(
+      `Pago ${pagoCreado.id} creado — status=${pagoCreado.status} status_detail=${pagoCreado.status_detail} transaction_amount=${pagoCreado.transaction_amount} (pedido.total=${pedido.total}) payment_method_id=${pagoCreado.payment_method_id}`,
+    );
+
+    // Verificación pedida explícitamente además de la de arriba: se confirma
+    // también contra lo que Mercado Pago reporta haber registrado en su
+    // respuesta — no debería diferir (se lo mandamos nosotros), pero si algo
+    // raro pasara, no se marca el pedido como pagado sin esta comprobación.
+    if (
+      pagoCreado.transaction_amount != null &&
+      Math.abs(pagoCreado.transaction_amount - pedido.total) >
+        TOLERANCIA_MONTO
+    ) {
+      this.logger.error(
+        `Pago ${pagoCreado.id} de Mercado Pago reporta transaction_amount ${pagoCreado.transaction_amount}, distinto del total real del pedido ${pedido.numeroPedido} (${pedido.total}) — no se marca como pagado.`,
+      );
+      return { resultado: 'pendiente' };
     }
 
     const pedidoActualizado = await this.verificarYActualizarPorPaymentId(
@@ -138,7 +267,10 @@ export class PaymentsService {
    * Único punto de escritura de estadoPago en todo el módulo. Tanto el flujo
    * síncrono (POST /pagos/procesar) como el webhook pasan por aquí — ambos
    * vuelven a consultar el pago real contra Mercado Pago antes de tocar la BD,
-   * y ambos son idempotentes si el pedido ya estaba pagado.
+   * y ambos son idempotentes si el pedido ya estaba pagado. Esta es también
+   * la fuente de verdad DEFINITIVA para pagos que tardan en confirmarse
+   * (ticket/OXXO puede tardar días): /procesar da la respuesta inmediata,
+   * pero el webhook -vía este mismo método- es el que termina de confirmar.
    */
   private async verificarYActualizarPorPaymentId(
     mercadopagoPaymentId: string,
@@ -181,10 +313,5 @@ export class PaymentsService {
     // el módulo vendedor decide manualmente si reintentar o cancelar el pedido.
 
     return { pedidoId: pedido.id, estadoActualEnMp: pagoVerificado.status };
-  }
-
-  private async emailDelUsuario(usuarioId: string): Promise<string | null> {
-    const usuario = await this.usuarios.findOne({ where: { id: usuarioId } });
-    return usuario?.email ?? null;
   }
 }

@@ -4,12 +4,34 @@ import {
   IsArray,
   IsEnum,
   IsInt,
+  IsOptional,
   IsString,
   IsUUID,
+  MaxLength,
+  MinLength,
   Min,
   ValidateNested,
 } from 'class-validator';
-import { Color, MetodoPago, Talla } from '../../../entities';
+import { MetodoPago } from '../../../entities';
+
+// Factura fiscal: OPCIONAL — solo se manda este objeto si el comprador marcó
+// "Requiero factura fiscal" en el checkout. Si no viene, el pedido
+// simplemente no lleva datos fiscales (columnas NULL), nunca se exige.
+export class DatosFiscalesDto {
+  @IsString()
+  @MinLength(12)
+  @MaxLength(13)
+  rfc: string;
+
+  @IsString()
+  @MinLength(2)
+  @MaxLength(200)
+  razonSocial: string;
+
+  @IsString()
+  @MaxLength(10)
+  regimenFiscal: string;
+}
 
 // Nota deliberada: este DTO NO tiene ningún campo de precio ni de costo de envío.
 // Es la primera línea de defensa contra manipulación de precios (OWASP A03/A08):
@@ -21,11 +43,16 @@ export class ItemPedidoDto {
   @IsUUID()
   productoId: string;
 
-  @IsEnum(Talla)
-  talla: Talla;
+  // Talla/color ya no son enums fijos (ver modules/catalogos) — OrdersService
+  // valida que el nombre exista, esté activo y pertenezca al catálogo de ESE
+  // producto (ver `producto.tallasDisponibles`/`coloresDisponibles`).
+  @IsString()
+  @MaxLength(20)
+  talla: string;
 
-  @IsEnum(Color)
-  color: Color;
+  @IsString()
+  @MaxLength(60)
+  color: string;
 
   @IsInt()
   @Min(1)
@@ -52,4 +79,9 @@ export class CrearPedidoDto {
 
   @IsEnum(MetodoPago)
   metodoPago: MetodoPago;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => DatosFiscalesDto)
+  datosFiscales?: DatosFiscalesDto;
 }

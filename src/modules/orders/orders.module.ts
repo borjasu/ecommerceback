@@ -11,6 +11,7 @@ import { OffersModule } from '../offers/offers.module';
 import { ShippingModule } from '../shipping/shipping.module';
 import { OrdersController } from './orders.controller';
 import { OrdersService } from './orders.service';
+import { OrdersCleanupService } from './orders-cleanup.service';
 import { VendorOrdersController } from './vendor-orders.controller';
 import { VendorOrdersService } from './vendor-orders.service';
 
@@ -27,7 +28,7 @@ import { VendorOrdersService } from './vendor-orders.service';
     ShippingModule,
   ],
   controllers: [OrdersController, VendorOrdersController],
-  providers: [OrdersService, VendorOrdersService],
+  providers: [OrdersService, VendorOrdersService, OrdersCleanupService],
   exports: [OrdersService],
 })
 export class OrdersModule {}

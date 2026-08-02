@@ -1,5 +1,6 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsInt,
@@ -28,6 +29,17 @@ export class ListarPedidosVendedorQueryDto {
   @IsOptional()
   @IsDateString()
   hasta?: string;
+
+  // Por default (ausente o false) la vista principal NUNCA incluye pedidos
+  // cancelados automáticamente por abandono (ver OrdersCleanupService) — solo
+  // aparecen si se pide explícitamente esta pestaña/filtro aparte.
+  // Transform explícito, no @Type(() => Boolean): un query param llega SIEMPRE
+  // como string ("false"), y Boolean("false") da true en JS — sin esto,
+  // ?soloAbandonados=false terminaría activando el filtro igual.
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  soloAbandonados?: boolean;
 
   @IsOptional()
   @Type(() => Number)

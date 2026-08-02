@@ -43,4 +43,15 @@ export class OrdersController {
   ): Promise<Pedido> {
     return this.ordersService.obtenerUnoDelUsuario(id, usuario.id);
   }
+
+  // Sin @Roles: accesible tanto al vendedor (cualquier pedido) como al
+  // comprador dueño del pedido — OrdersService.obtenerRastreo resuelve cuál
+  // aplica según el rol, mismo criterio anti-IDOR que el resto del servicio.
+  @Get(':id/rastreo')
+  obtenerRastreo(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() usuario: AuthenticatedUser,
+  ): Promise<{ trackingStatus: string | null }> {
+    return this.ordersService.obtenerRastreo(id, usuario);
+  }
 }

@@ -21,8 +21,19 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
 
-const THROTTLE_AUTH = {
-  auth: { limit: 5, ttl: 60000 },
+// Todas sobreescriben el throttler "default" para SU ruta específica (ver
+// nota en app.module.ts) — cada una tiene su propio contador aislado por
+// handler, así que nunca compiten por cupo entre sí.
+const THROTTLE_CREDENCIALES = {
+  default: { limit: 5, ttl: 60000 },
+};
+
+// /auth/refresh lo dispara automáticamente el interceptor de refresco del
+// frontend cada vez que una petición protegida da 401 (recargar la página,
+// varias pestañas, etc.) — necesita más margen que un intento de login manual,
+// que es una acción explícita del usuario y debe seguir estricto.
+const THROTTLE_REFRESH = {
+  default: { limit: 10, ttl: 60000 },
 };
 
 @Controller('auth')
@@ -33,7 +44,7 @@ export class AuthController {
   ) {}
 
   @Post('registro')
-  @Throttle(THROTTLE_AUTH)
+  @Throttle(THROTTLE_CREDENCIALES)
   @HttpCode(HttpStatus.CREATED)
   async registro(
     @Body() dto: RegistroDto,
@@ -48,7 +59,7 @@ export class AuthController {
   }
 
   @Post('login')
-  @Throttle(THROTTLE_AUTH)
+  @Throttle(THROTTLE_CREDENCIALES)
   @HttpCode(HttpStatus.OK)
   async login(
     @Body() dto: LoginDto,
@@ -70,7 +81,7 @@ export class AuthController {
   }
 
   @Post('refresh')
-  @Throttle(THROTTLE_AUTH)
+  @Throttle(THROTTLE_REFRESH)
   @HttpCode(HttpStatus.OK)
   async refresh(
     @Req() req: Request,

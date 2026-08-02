@@ -51,9 +51,24 @@ export class HttpExceptionFilter implements ExceptionFilter {
         message = exception.message;
       }
     } else if (exception instanceof Error) {
-      // Errores no controlados (p. ej. QueryFailedError de TypeORM): se registran
-      // completos en el log del servidor, pero al cliente solo llega un 500 genérico.
+      // Errores no controlados (p. ej. QueryFailedError de TypeORM, o
+      // PayloadTooLargeError de body-parser cuando el JSON supera el límite
+      // configurado en main.ts): se registran completos en el log del
+      // servidor con stack incluido para diagnóstico rápido.
       this.logger.error(exception.message, exception.stack);
+
+      // Excepción puntual: errores de tipo http-errors (body-parser, etc.)
+      // traen su propio `.status`/`.statusCode` 4xx — ahí SÍ tiene sentido
+      // devolverlo con un mensaje seguro y accionable en vez de un 500 genérico,
+      // porque el problema es del request del cliente, no un bug del servidor.
+      const estadoDeLibreria = this.extraerEstadoCliente(exception);
+      if (estadoDeLibreria !== null) {
+        status = estadoDeLibreria;
+        message =
+          estadoDeLibreria === HttpStatus.PAYLOAD_TOO_LARGE
+            ? 'El archivo es demasiado grande. Máximo permitido: 10MB.'
+            : 'Solicitud inválida.';
+      }
     } else {
       this.logger.error('Excepción desconocida', JSON.stringify(exception));
     }
@@ -66,5 +81,17 @@ export class HttpExceptionFilter implements ExceptionFilter {
     };
 
     response.status(status).json(cuerpo);
+  }
+
+  private extraerEstadoCliente(exception: Error): number | null {
+    const posible = exception as { status?: unknown; statusCode?: unknown };
+    const estado =
+      typeof posible.status === 'number'
+        ? posible.status
+        : typeof posible.statusCode === 'number'
+          ? posible.statusCode
+          : null;
+
+    return estado !== null && estado >= 400 && estado < 500 ? estado : null;
   }
 }

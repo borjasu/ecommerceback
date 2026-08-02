@@ -48,4 +48,17 @@ export class InfoEnvio {
 
   @Column({ type: 'timestamptz', name: 'envio_fecha_envio', nullable: true })
   fechaEnvio: Date | null;
+
+  // Texto libre, NO un enum de Postgres a propósito: no hay documentación
+  // oficial de Skydropx confirmada con la lista completa y exacta de
+  // valores posibles (ver skydropx-client.service.ts) — un valor inesperado
+  // no debe romper la actualización del pedido. Se actualiza por webhook
+  // (POST /envios/webhook) o por consulta bajo demanda (GET /pedidos/:id/rastreo).
+  @Column({
+    type: 'varchar',
+    length: 40,
+    name: 'envio_tracking_status',
+    nullable: true,
+  })
+  trackingStatus: string | null;
 }

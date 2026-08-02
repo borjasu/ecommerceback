@@ -2,23 +2,28 @@ import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
-  IsEnum,
   IsInt,
+  IsString,
   IsUUID,
+  MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
-import { Color, Talla } from '../../../entities';
 
+// Talla/color no afectan el cálculo de envío (solo cantidad/producto para
+// peso y dimensiones) — se validan como string simple, ya no como enum fijo,
+// consistente con modules/catalogos.
 export class ItemCotizacionDto {
   @IsUUID()
   productoId: string;
 
-  @IsEnum(Talla)
-  talla: Talla;
+  @IsString()
+  @MaxLength(20)
+  talla: string;
 
-  @IsEnum(Color)
-  color: Color;
+  @IsString()
+  @MaxLength(60)
+  color: string;
 
   @IsInt()
   @Min(1)

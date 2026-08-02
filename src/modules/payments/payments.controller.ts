@@ -8,8 +8,13 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { PaymentsService, RespuestaProcesarPago } from './payments.service';
+import {
+  PaymentsService,
+  RespuestaPreferencia,
+  RespuestaProcesarPago,
+} from './payments.service';
 import { ProcesarPagoDto } from './dto/procesar-pago.dto';
+import { CrearPreferenciaDto } from './dto/crear-preferencia.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../../common/interfaces/authenticated-user.interface';
@@ -17,6 +22,17 @@ import type { AuthenticatedUser } from '../../common/interfaces/authenticated-us
 @Controller('pagos')
 export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
+
+  // Flujo oficial de Checkout Bricks (Payment Brick + Preference): el
+  // frontend llama esto ANTES de montar el Brick, con el pedido ya creado.
+  @Post('crear-preferencia')
+  @UseGuards(JwtAuthGuard)
+  crearPreferencia(
+    @Body() dto: CrearPreferenciaDto,
+    @CurrentUser() usuario: AuthenticatedUser,
+  ): Promise<RespuestaPreferencia> {
+    return this.paymentsService.crearPreferencia(usuario.id, dto);
+  }
 
   @Post('procesar')
   @UseGuards(JwtAuthGuard)
