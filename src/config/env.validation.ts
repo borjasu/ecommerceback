@@ -64,6 +64,11 @@ export const envValidationSchema = Joi.object({
   // tabla/CRUD propios para un solo valor booleano que casi nunca cambia.
   ENVIO_REQUIERE_PICKUP: Joi.boolean().default(true),
 
+  // Minutos que un pedido puede quedar en estadoPago:'pendiente' antes de que
+  // OrdersCleanupService lo cancele automáticamente por abandono. Se puede
+  // bajar temporalmente (ej. a 1-2) solo para probar el job más rápido.
+  PEDIDO_ABANDONO_MINUTOS: Joi.number().default(120),
+
   THROTTLE_TTL: Joi.number().default(60000),
   THROTTLE_LIMIT: Joi.number().default(100),
   THROTTLE_AUTH_TTL: Joi.number().default(60000),

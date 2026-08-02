@@ -73,6 +73,15 @@ export class VendorOrdersService {
       qb.andWhere('pedido.fecha <= :hasta', { hasta: query.hasta });
     }
 
+    // Por default, la vista principal NUNCA mezcla pedidos cancelados por
+    // abandono (nunca se pagaron) con pedidos reales — solo aparecen si se
+    // pide explícitamente la pestaña "Abandonados".
+    if (query.soloAbandonados) {
+      qb.andWhere('pedido.cancelado_por_abandono = true');
+    } else {
+      qb.andWhere('pedido.cancelado_por_abandono = false');
+    }
+
     const total = await qb.getCount();
     const data = await qb
       .skip((query.page - 1) * query.limit)
