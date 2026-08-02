@@ -13,6 +13,7 @@ import { ItemPedido } from './item-pedido.entity';
 import { PedidoAuditoria } from './pedido-auditoria.entity';
 import { DatosEnvio } from './datos-envio.embeddable';
 import { InfoEnvio } from './info-envio.embeddable';
+import { DatosFiscales } from './datos-fiscales.embeddable';
 
 const decimalTransformer = {
   to: (value: number) => value,
@@ -103,6 +104,9 @@ export class Pedido {
 
   @Column(() => InfoEnvio, { prefix: false })
   infoEnvio: InfoEnvio;
+
+  @Column(() => DatosFiscales, { prefix: false })
+  datosFiscales: DatosFiscales;
 
   @CreateDateColumn({ name: 'fecha' })
   fecha: Date;

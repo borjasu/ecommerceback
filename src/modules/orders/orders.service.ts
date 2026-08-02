@@ -141,6 +141,11 @@ export class OrdersService {
         urlRastreo: null,
         fechaEnvio: null,
       },
+      datosFiscales: {
+        rfc: dto.datosFiscales?.rfc ?? null,
+        razonSocial: dto.datosFiscales?.razonSocial ?? null,
+        regimenFiscal: dto.datosFiscales?.regimenFiscal ?? null,
+      },
       items: lineas.map((linea) =>
         this.dataSource.getRepository(ItemPedido).create({
           productoId: linea.producto.id,

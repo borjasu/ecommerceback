@@ -11,4 +11,5 @@ export * from './talla.entity';
 export * from './mensaje-contacto.entity';
 export * from './datos-envio.embeddable';
 export * from './info-envio.embeddable';
+export * from './datos-fiscales.embeddable';
 export * from './enums';
