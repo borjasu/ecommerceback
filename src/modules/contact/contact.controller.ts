@@ -15,11 +15,13 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 
-// Límite propio y estricto (aparte del global) — es un endpoint público SIN
+// Sobreescribe el throttler "default" SOLO para esta ruta (ver nota en
+// app.module.ts sobre por qué no se registra un throttler nombrado nuevo,
+// que se filtraría al resto de la app) — es un endpoint público SIN
 // autenticación, el más expuesto a spam/abuso de todo el backend: 3 mensajes
 // cada 10 minutos por IP.
 const THROTTLE_CONTACTO = {
-  contacto: { limit: 3, ttl: 600_000 },
+  default: { limit: 3, ttl: 600_000 },
 };
 
 @Controller('contacto')

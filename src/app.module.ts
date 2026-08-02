@@ -27,6 +27,16 @@ import { ContactModule } from './modules/contact/contact.module';
       // falla rápido si falta o es inválida cualquier variable requerida
       validationOptions: { abortEarly: false },
     }),
+    // OJO con esto: cada throttler NOMBRADO que se registra aquí se evalúa en
+    // TODAS las rutas de la app, no solo donde se usa @Throttle — @Throttle
+    // solo sobreescribe el límite de ESE nombre en ESA ruta; en cualquier otra
+    // ruta que no lo mencione, el throttler igual corre con el límite default
+    // de abajo. Por eso hay un solo throttler nombrado ("default"): los límites
+    // más estrictos de rutas puntuales (login, refresh, cotizar envío,
+    // contacto) se logran con @Throttle({ default: { limit, ttl } }) en esa
+    // ruta específica, nunca registrando un throttler nuevo — la clave de
+    // rate-limit ya incluye el nombre del handler, así que cada ruta tiene su
+    // propio contador aislado sin necesidad de un nombre de throttler distinto.
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -36,26 +46,6 @@ import { ContactModule } from './modules/contact/contact.module';
             name: 'default',
             ttl: config.get<number>('THROTTLE_TTL')!,
             limit: config.get<number>('THROTTLE_LIMIT')!,
-          },
-          {
-            name: 'auth',
-            ttl: config.get<number>('THROTTLE_AUTH_TTL')!,
-            limit: config.get<number>('THROTTLE_AUTH_LIMIT')!,
-          },
-          {
-            // Cotizar envío puede tener costo/cuota del lado de Skydropx — límite
-            // propio más estricto que el global, aparte del de auth.
-            name: 'shipping',
-            ttl: 60000,
-            limit: 10,
-          },
-          {
-            // POST /contacto es público y sin autenticación — el endpoint más
-            // expuesto a spam/abuso de todo el backend, límite mucho más
-            // estricto que el global (3 mensajes cada 10 min por IP).
-            name: 'contacto',
-            ttl: 600_000,
-            limit: 3,
           },
         ],
       }),
