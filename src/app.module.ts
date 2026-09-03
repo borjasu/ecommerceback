@@ -1,8 +1,10 @@
+import { join } from 'path';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ServeStaticModule } from '@nestjs/serve-static';
 import { AppController } from './app.controller';
 import { envValidationSchema } from './config/env.validation';
 import { DatabaseModule } from './database/database.module';
@@ -52,6 +54,14 @@ import { ContactModule } from './modules/contact/contact.module';
       }),
     }),
     ScheduleModule.forRoot(),
+    // Sirve los PNG generados por RecoloreoService (uploads/productos-colores/)
+    // bajo /uploads/... — no hay backend de subida de archivos general
+    // todavía (ver src/main.ts), esto es únicamente para las imágenes que
+    // el propio servidor genera y guarda en disco.
+    ServeStaticModule.forRoot({
+      rootPath: join(process.cwd(), 'uploads'),
+      serveRoot: '/uploads',
+    }),
     DatabaseModule,
     AuthModule,
     UsersModule,
