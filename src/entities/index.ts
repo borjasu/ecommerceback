@@ -1,5 +1,6 @@
 export * from './usuario.entity';
 export * from './producto.entity';
+export * from './producto-color-imagen.entity';
 export * from './direccion.entity';
 export * from './favorito.entity';
 export * from './oferta.entity';

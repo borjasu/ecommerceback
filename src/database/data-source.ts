@@ -13,6 +13,7 @@ import {
   Color,
   Talla,
   MensajeContacto,
+  ProductoColorImagen,
 } from '../entities';
 
 config();
@@ -37,6 +38,7 @@ export const AppDataSource = new DataSource({
     Color,
     Talla,
     MensajeContacto,
+    ProductoColorImagen,
   ],
   migrations: ['src/database/migrations/*.ts'],
   synchronize: false,

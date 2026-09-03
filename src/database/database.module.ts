@@ -13,6 +13,7 @@ import {
   Color,
   Talla,
   MensajeContacto,
+  ProductoColorImagen,
 } from '../entities';
 
 @Module({
@@ -35,6 +36,7 @@ import {
           Color,
           Talla,
           MensajeContacto,
+          ProductoColorImagen,
         ],
         migrations: ['dist/database/migrations/*.js'],
         migrationsRun: false,
