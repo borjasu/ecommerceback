@@ -307,10 +307,23 @@ export class PaymentsService {
         { id: pedido.id },
         { estadoPago: EstadoPago.PAGADO },
       );
+    } else if (
+      pagoVerificado.status === 'rejected' ||
+      pagoVerificado.status === 'cancelled'
+    ) {
+      // Explícito y distinto de PENDIENTE: el comprador sí intentó pagar y
+      // Mercado Pago lo rechazó, no es que todavía no pague (p. ej. un
+      // ticket OXXO en espera). No es un estado terminal — un pedido
+      // RECHAZADO puede volver a pasar por aquí y terminar en PAGADO si el
+      // comprador reintenta con otro método/tarjeta (ver
+      // checkout.component.ts del frontend, botón "Intentar de nuevo").
+      await this.pedidos.update(
+        { id: pedido.id },
+        { estadoPago: EstadoPago.RECHAZADO },
+      );
     }
-    // rejected/cancelled/pending: EstadoPago no tiene un valor "rechazado" propio
-    // (solo pendiente|pagado|reembolsado), así que se deja como pendiente —
-    // el módulo vendedor decide manualmente si reintentar o cancelar el pedido.
+    // pending: se deja como PENDIENTE (default) — sigue esperando
+    // confirmación (p. ej. ticket OXXO todavía no pagado).
 
     return { pedidoId: pedido.id, estadoActualEnMp: pagoVerificado.status };
   }

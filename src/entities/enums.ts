@@ -36,6 +36,13 @@ export enum EstadoPago {
   PENDIENTE = 'pendiente',
   PAGADO = 'pagado',
   REEMBOLSADO = 'reembolsado',
+  // Mercado Pago reportó el pago como rejected/cancelled (ver
+  // PaymentsService.verificarYActualizarPorPaymentId) — distinto de
+  // PENDIENTE: ahí el comprador simplemente no ha completado el pago
+  // (p. ej. ticket OXXO sin pagar todavía), aquí sí lo intentó y fue
+  // rechazado. Antes ambos casos caían en PENDIENTE, indistinguibles para
+  // el vendedor.
+  RECHAZADO = 'rechazado',
 }
 
 export enum MetodoPago {

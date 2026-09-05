@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Cron } from '@nestjs/schedule';
-import { LessThan, Repository } from 'typeorm';
+import { In, LessThan, Repository } from 'typeorm';
 import { EstadoPago, EstadoPedido, Pedido } from '../../entities';
 
 /**
@@ -10,10 +10,12 @@ import { EstadoPago, EstadoPedido, Pedido } from '../../entities';
  * confirme (práctica normal de e-commerce: si el pago falla o el comprador
  * cierra la pestaña a medio pagar, o si es un método que tarda como OXXO, ya
  * existe el pedido al que actualizar el estado más tarde). El problema es que
- * si nunca se paga, ese pedido se queda "pendiente" para siempre, mezclado en
- * el panel del vendedor con pedidos reales. Este job los cancela solo
- * (estado: 'cancelado', marcados con canceladoPorAbandono para distinguirlos
- * de una cancelación manual) pasado PEDIDO_ABANDONO_MINUTOS sin pagarse.
+ * si nunca se paga, ese pedido se queda "pendiente" (o "rechazado" si el
+ * comprador lo intentó y Mercado Pago lo rechazó, y nunca reintentó) para
+ * siempre, mezclado en el panel del vendedor con pedidos reales. Este job los
+ * cancela solo (estado: 'cancelado', marcados con canceladoPorAbandono para
+ * distinguirlos de una cancelación manual) pasado PEDIDO_ABANDONO_MINUTOS sin
+ * pagarse.
  *
  * TODO(stock): si en algún momento se implementa reserva de inventario por
  * talla/color al crear el pedido, este mismo job es el lugar donde liberar esa
@@ -38,7 +40,7 @@ export class OrdersCleanupService {
     const resultado = await this.pedidos.update(
       {
         estado: EstadoPedido.PENDIENTE,
-        estadoPago: EstadoPago.PENDIENTE,
+        estadoPago: In([EstadoPago.PENDIENTE, EstadoPago.RECHAZADO]),
         fecha: LessThan(limite),
       },
       {
