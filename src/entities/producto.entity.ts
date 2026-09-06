@@ -3,11 +3,13 @@ import {
   Entity,
   JoinTable,
   ManyToMany,
+  OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Audiencia, Categoria, Etiqueta } from './enums';
 import { Color } from './color.entity';
 import { Talla } from './talla.entity';
+import { ProductoColorImagen } from './producto-color-imagen.entity';
 
 @Entity('productos')
 export class Producto {
@@ -65,6 +67,15 @@ export class Producto {
 
   @Column({ type: 'varchar', name: 'imagen_url' })
   imagenUrl: string;
+
+  // Fotos reales subidas por el vendedor, una por color habilitado (ver
+  // ProductoColorImagenesService) — reemplaza al recoloreo algorítmico que
+  // existía antes. Igual que coloresDisponibles/tallasDisponibles, nunca se
+  // carga sola por lazy-loading: cada query pública/vendedor que la necesite
+  // debe pedirla explícito (relations: {...} o leftJoinAndSelect), ver
+  // products.service.ts / vendor-products.service.ts.
+  @OneToMany(() => ProductoColorImagen, (imagen) => imagen.producto)
+  imagenesColores: ProductoColorImagen[];
 
   @Column({ type: 'text', array: true, nullable: true })
   imagenes: string[] | null;

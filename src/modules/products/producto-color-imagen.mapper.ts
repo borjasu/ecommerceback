@@ -1,5 +1,6 @@
 import { ProductoColorImagen } from '../../entities';
 
+// Foto por color subida por el vendedor (ver ProductoColorImagenesService).
 // Igual que producto-con-precio.mapper.ts: nunca se expone la entidad
 // TypeORM cruda (evita filtrar la relación `producto` cargada).
 export type ProductoColorImagenPlano = Omit<ProductoColorImagen, 'producto'>;

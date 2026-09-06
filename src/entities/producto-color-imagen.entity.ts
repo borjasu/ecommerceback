@@ -7,16 +7,19 @@ import {
 } from 'typeorm';
 import { Producto } from './producto.entity';
 
-// Artefacto visual generado por el algoritmo de recoloreo (ver RecoloreoService),
-// NO una variante de stock: este backend todavía no tiene modelo de
+// Foto real de una prenda en un color específico, subida a mano por el
+// vendedor (ver ProductoColorImagenesService) — reemplaza al algoritmo de
+// recoloreo que existía antes (generaba la variante de color a partir de la
+// foto base con HSL; se eliminó por resultados poco confiables). NO es una
+// variante de stock: este backend todavía no tiene modelo de
 // talla+color+stock (eso hoy solo existe simulado en el frontend), así que
 // esta tabla se mantiene deliberadamente desacoplada del catálogo Color —
 // el vendedor nombra el color libremente (ej. "Verde olivo") sin depender de
-// que exista un registro correspondiente en `colores`. Un archivo PNG en
-// disco (uploads/productos-colores/<id>.png) respalda cada fila; por eso el
+// que exista un registro correspondiente en `colores`. Un archivo de imagen en
+// disco (uploads/productos-colores/<id>.<ext>) respalda cada fila; por eso el
 // borrado es físico (ver ProductoColorImagenesService.eliminar), no lógico
 // como el resto del dominio: no hay pedidos históricos que referencien esto,
-// es un artefacto regenerable.
+// es una foto que el vendedor puede volver a subir si la borra por error.
 @Entity('producto_color_imagenes')
 export class ProductoColorImagen {
   @PrimaryGeneratedColumn('uuid')

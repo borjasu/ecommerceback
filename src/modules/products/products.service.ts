@@ -33,6 +33,7 @@ export interface FiltrosDisponibles {
 const RELACIONES_CATALOGO = {
   coloresDisponibles: true,
   tallasDisponibles: true,
+  imagenesColores: true,
 } as const;
 
 @Injectable()
@@ -48,6 +49,7 @@ export class ProductsService {
       .createQueryBuilder('producto')
       .leftJoinAndSelect('producto.coloresDisponibles', 'colores')
       .leftJoinAndSelect('producto.tallasDisponibles', 'tallas')
+      .leftJoinAndSelect('producto.imagenesColores', 'imagenesColores')
       .where('producto.activo = true');
 
     // Todo parametrizado vía query builder — nunca concatenación de strings en SQL
@@ -106,6 +108,7 @@ export class ProductsService {
       .createQueryBuilder('producto')
       .leftJoinAndSelect('producto.coloresDisponibles', 'colores')
       .leftJoinAndSelect('producto.tallasDisponibles', 'tallas')
+      .leftJoinAndSelect('producto.imagenesColores', 'imagenesColores')
       .where('producto.activo = true')
       .andWhere(
         '(producto.nombre ILIKE :termino OR producto.descripcion ILIKE :termino)',

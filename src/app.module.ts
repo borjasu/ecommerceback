@@ -54,10 +54,10 @@ import { ContactModule } from './modules/contact/contact.module';
       }),
     }),
     ScheduleModule.forRoot(),
-    // Sirve los PNG generados por RecoloreoService (uploads/productos-colores/)
-    // bajo /uploads/... — no hay backend de subida de archivos general
-    // todavía (ver src/main.ts), esto es únicamente para las imágenes que
-    // el propio servidor genera y guarda en disco.
+    // Sirve las fotos por color subidas por el vendedor
+    // (uploads/productos-colores/, ver ProductoColorImagenesService) bajo
+    // /uploads/... — sigue sin haber backend de subida de archivos general
+    // (ver src/main.ts): esto es únicamente para esas fotos.
     ServeStaticModule.forRoot({
       rootPath: join(process.cwd(), 'uploads'),
       serveRoot: '/uploads',

@@ -10,11 +10,15 @@ import { aProductoPlano, ProductoPlano } from './producto-con-precio.mapper';
 
 const CODIGO_VIOLACION_UNIQUE_POSTGRES = '23505';
 
-// coloresDisponibles/tallasDisponibles son relaciones (ver entities/producto.entity.ts)
-// — hace falta pedirlas explícito, TypeORM no las carga solas.
+// coloresDisponibles/tallasDisponibles/imagenesColores son relaciones (ver
+// entities/producto.entity.ts) — hace falta pedirlas explícito, TypeORM no
+// las carga solas. imagenesColores importa aquí sobre todo para actualizar():
+// sin esto, el PATCH devolvería el producto con las fotos ya subidas
+// borradas de la respuesta (nunca se tocaron, solo no se cargaron).
 const RELACIONES_CATALOGO = {
   coloresDisponibles: true,
   tallasDisponibles: true,
+  imagenesColores: true,
 } as const;
 
 /**
