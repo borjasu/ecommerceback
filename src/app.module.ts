@@ -15,6 +15,7 @@ import { ProductsModule } from './modules/products/products.module';
 import { OffersModule } from './modules/offers/offers.module';
 import { CatalogosModule } from './modules/catalogos/catalogos.module';
 import { AddressesModule } from './modules/addresses/addresses.module';
+import { PostalCodesModule } from './modules/postal-codes/postal-codes.module';
 import { FavoritesModule } from './modules/favorites/favorites.module';
 import { ShippingModule } from './modules/shipping/shipping.module';
 import { OrdersModule } from './modules/orders/orders.module';
@@ -69,6 +70,7 @@ import { ContactModule } from './modules/contact/contact.module';
     OffersModule,
     ProductsModule,
     AddressesModule,
+    PostalCodesModule,
     FavoritesModule,
     ShippingModule,
     OrdersModule,
