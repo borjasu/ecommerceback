@@ -326,9 +326,18 @@ async function seed(): Promise<void> {
         usuarioId: comprador.id,
         alias: 'Casa',
         nombreCompleto: comprador.nombre,
-        direccion: 'Calle 11 Sur 456, Col. Centro',
-        ciudad: 'Puebla',
+        // Colonia/municipio/estado reales del catálogo SEPOMEX para este CP
+        // (ver codigos_postales, sembrado aparte con `npm run
+        // seed:codigos-postales`) — mismos que devolvería GET
+        // /codigos-postales/72000 en el checkout.
+        calle: 'Calle 11 Sur',
+        numeroExterior: '456',
+        numeroInterior: null,
+        colonia: 'Centro',
+        municipio: 'Puebla',
+        estado: 'Puebla',
         codigoPostal: '72000',
+        referencias: null,
         telefono: '2221234567',
         predeterminada: true,
       }),
@@ -347,11 +356,11 @@ async function seed(): Promise<void> {
       producto = await productosRepo.save(
         productosRepo.create({
           ...resto,
-          coloresDisponibles: coloresNombres.map(
-            (nombre) => colorPorNombre.get(nombre)!,
+          coloresDisponibles: coloresNombres.map((nombre) =>
+            colorPorNombre.get(nombre)!,
           ),
-          tallasDisponibles: tallasNombres.map(
-            (nombre) => tallaPorNombre.get(nombre)!,
+          tallasDisponibles: tallasNombres.map((nombre) =>
+            tallaPorNombre.get(nombre)!,
           ),
         }),
       );
