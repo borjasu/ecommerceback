@@ -125,8 +125,19 @@ export class OrdersService {
       total,
       datosEnvio: {
         nombreCompleto: direccion.nombreCompleto,
-        direccion: direccion.direccion,
-        ciudad: direccion.ciudad,
+        // direccion/ciudad: calculados a partir de los campos estructurados
+        // de abajo, no capturados aparte — se conservan solo porque
+        // vendedor/pedidos y mis-pedidos (comprador) ya los leen tal cual
+        // (ver DatosEnvio.embeddable.ts).
+        direccion: this.formatearDireccionLegacy(direccion),
+        ciudad: direccion.municipio,
+        calle: direccion.calle,
+        numeroExterior: direccion.numeroExterior,
+        numeroInterior: direccion.numeroInterior,
+        colonia: direccion.colonia,
+        municipio: direccion.municipio,
+        estado: direccion.estado,
+        referencias: direccion.referencias,
         codigoPostal: direccion.codigoPostal,
         telefono: direccion.telefono,
       },
@@ -200,7 +211,9 @@ export class OrdersService {
   ): Promise<{ trackingStatus: string | null }> {
     const pedido = await this.pedidos.findOne({
       where:
-        usuario.rol === RolUsuario.VENDEDOR ? { id } : { id, usuarioId: usuario.id },
+        usuario.rol === RolUsuario.VENDEDOR
+          ? { id }
+          : { id, usuarioId: usuario.id },
     });
     if (!pedido) {
       throw new NotFoundException('Pedido no encontrado.');
@@ -238,5 +251,15 @@ export class OrdersService {
     throw new BadRequestException(
       'No se pudo generar un número de pedido único. Intenta de nuevo.',
     );
+  }
+
+  // Compat: vendedor/pedidos y mis-pedidos (comprador) del frontend siguen
+  // mostrando una sola línea de calle — se arma aquí en vez de agregarles el
+  // desglose estructurado, para no tocar esas dos vistas ya funcionando.
+  private formatearDireccionLegacy(direccion: Direccion): string {
+    const interior = direccion.numeroInterior
+      ? ` Int. ${direccion.numeroInterior}`
+      : '';
+    return `${direccion.calle} ${direccion.numeroExterior}${interior}, Col. ${direccion.colonia}`;
   }
 }
