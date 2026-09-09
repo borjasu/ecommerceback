@@ -3,12 +3,11 @@ export enum RolUsuario {
   VENDEDOR = 'vendedor',
 }
 
-export enum Categoria {
-  PANTALON = 'pantalon',
-  PLAYERA = 'playera',
-  CAMISA = 'camisa',
-  BERMUDA = 'bermuda',
-}
+// Categoria YA NO es un enum fijo: es un catálogo dinámico con CRUD propio,
+// SIN borrado lógico (ver entities/categoria.entity.ts y modules/catalogos).
+// Producto.categoria/Oferta.categoria pasan de columna enum a varchar
+// (Producto con FK real a categorias.nombre; Oferta sin FK, snapshot suelto
+// — ver migración AgregarCategoriasDinamicas).
 
 export enum Audiencia {
   HOMBRE = 'hombre',

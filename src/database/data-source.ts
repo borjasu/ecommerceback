@@ -13,6 +13,7 @@ import {
   PedidoAuditoria,
   Color,
   Talla,
+  Categoria,
   MensajeContacto,
   ProductoColorImagen,
 } from '../entities';
@@ -39,6 +40,7 @@ export const AppDataSource = new DataSource({
     PedidoAuditoria,
     Color,
     Talla,
+    Categoria,
     MensajeContacto,
     ProductoColorImagen,
   ],

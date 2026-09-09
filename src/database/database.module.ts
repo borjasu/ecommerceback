@@ -13,6 +13,7 @@ import {
   PedidoAuditoria,
   Color,
   Talla,
+  Categoria,
   MensajeContacto,
   ProductoColorImagen,
 } from '../entities';
@@ -37,6 +38,7 @@ import {
           PedidoAuditoria,
           Color,
           Talla,
+          Categoria,
           MensajeContacto,
           ProductoColorImagen,
         ],

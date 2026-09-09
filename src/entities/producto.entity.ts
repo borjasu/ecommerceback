@@ -6,7 +6,7 @@ import {
   OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { Audiencia, Categoria, Etiqueta } from './enums';
+import { Audiencia, Etiqueta } from './enums';
 import { Color } from './color.entity';
 import { Talla } from './talla.entity';
 import { ProductoColorImagen } from './producto-color-imagen.entity';
@@ -39,8 +39,15 @@ export class Producto {
   })
   precio: number;
 
-  @Column({ type: 'enum', enum: Categoria, enumName: 'categoria_enum' })
-  categoria: Categoria;
+  // Ya NO es un enum tipado: es el `nombre` de una fila de la tabla dinámica
+  // `categorias` (ver entities/categoria.entity.ts). Se guarda como string
+  // plano — no como relación cargada — para no tocar todo el código que hoy
+  // trata esto como string (filtros, rutas de catálogo, ofertas por
+  // categoría). La integridad la garantiza un FK real a categorias.nombre
+  // con ON DELETE RESTRICT (ver migración AgregarCategoriasDinamicas): no se
+  // puede borrar una categoría mientras algún producto la use.
+  @Column({ type: 'varchar', length: 60 })
+  categoria: string;
 
   @Column({ type: 'enum', enum: Audiencia, enumName: 'audiencia_enum' })
   audiencia: Audiencia;

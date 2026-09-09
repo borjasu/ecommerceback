@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { Producto } from '../../entities';
 import { ColoresService } from '../catalogos/colores.service';
 import { TallasService } from '../catalogos/tallas.service';
+import { CategoriasService } from '../catalogos/categorias.service';
 import { CrearProductoDto } from './dto/crear-producto.dto';
 import { ActualizarProductoDto } from './dto/actualizar-producto.dto';
 import { aProductoPlano, ProductoPlano } from './producto-con-precio.mapper';
@@ -33,12 +34,14 @@ export class VendorProductsService {
     private readonly productos: Repository<Producto>,
     private readonly coloresService: ColoresService,
     private readonly tallasService: TallasService,
+    private readonly categoriasService: CategoriasService,
   ) {}
 
   async crear(dto: CrearProductoDto): Promise<ProductoPlano> {
     const [colores, tallas] = await Promise.all([
       this.coloresService.resolverActivosPorNombre(dto.coloresDisponibles),
       this.tallasService.resolverActivosPorNombre(dto.tallasDisponibles),
+      this.categoriasService.existeOFallar(dto.categoria),
     ]);
 
     const nuevo = this.productos.create({
@@ -84,6 +87,9 @@ export class VendorProductsService {
     if (tallasDisponibles) {
       producto.tallasDisponibles =
         await this.tallasService.resolverActivosPorNombre(tallasDisponibles);
+    }
+    if (dto.categoria) {
+      await this.categoriasService.existeOFallar(dto.categoria);
     }
 
     Object.assign(producto, resto);
