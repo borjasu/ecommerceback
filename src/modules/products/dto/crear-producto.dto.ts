@@ -13,7 +13,7 @@ import {
   MinLength,
   ValidateIf,
 } from 'class-validator';
-import { Audiencia, Categoria, Etiqueta } from '../../../entities';
+import { Audiencia, Etiqueta } from '../../../entities';
 
 export class CrearProductoDto {
   @IsString()
@@ -28,8 +28,13 @@ export class CrearProductoDto {
   @Min(0.01)
   precio: number;
 
-  @IsEnum(Categoria)
-  categoria: Categoria;
+  // Categoria ya no es un enum fijo (ver modules/catalogos): se valida solo
+  // la forma aquí; VendorProductsService confirma que exista de verdad en el
+  // catálogo vigente antes de guardar (mismo criterio que coloresDisponibles/
+  // tallasDisponibles).
+  @IsString()
+  @MinLength(1)
+  categoria: string;
 
   @IsEnum(Audiencia)
   audiencia: Audiencia;
