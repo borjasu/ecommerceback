@@ -176,7 +176,10 @@ export class OrdersService {
   listarDelUsuario(usuarioId: string): Promise<Pedido[]> {
     return this.pedidos.find({
       where: { usuarioId },
-      relations: { items: { producto: true } },
+      // imagenesColores: mismo patrón que products.service.ts — sin esto,
+      // mis-pedidos.component.ts (frontend) solo tenía item.producto.imagenUrl
+      // y caía al placeholder genérico para productos sin imagen general.
+      relations: { items: { producto: { imagenesColores: true } } },
       order: { fecha: 'DESC' },
     });
   }
@@ -187,7 +190,7 @@ export class OrdersService {
     // da 404, indistinguible de uno que no existe (mitiga IDOR).
     const pedido = await this.pedidos.findOne({
       where: { id, usuarioId },
-      relations: { items: { producto: true } },
+      relations: { items: { producto: { imagenesColores: true } } },
     });
 
     if (!pedido) {

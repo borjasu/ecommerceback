@@ -53,6 +53,10 @@ export class VendorOrdersService {
       .createQueryBuilder('pedido')
       .leftJoinAndSelect('pedido.items', 'items')
       .leftJoinAndSelect('items.producto', 'producto')
+      // Mismo patrón que products.service.ts — sin esto, pedidos.component.ts
+      // (vendedor) solo tenía item.producto.imagenUrl y caía al placeholder
+      // genérico para productos sin imagen general.
+      .leftJoinAndSelect('producto.imagenesColores', 'imagenesColores')
       .leftJoinAndSelect('pedido.usuario', 'usuario')
       .orderBy('pedido.fecha', 'DESC');
 
@@ -95,7 +99,7 @@ export class VendorOrdersService {
     const pedido = await this.pedidos.findOne({
       where: { id },
       relations: {
-        items: { producto: true },
+        items: { producto: { imagenesColores: true } },
         usuario: true,
         auditoria: true,
       },
