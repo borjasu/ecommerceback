@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Producto } from '../../entities';
@@ -49,7 +49,12 @@ export class VendorProductsService {
       imagenes: dto.imagenes ?? null,
       etiqueta: dto.etiqueta ?? null,
       destacado: dto.destacado ?? false,
+      mayoreoHabilitado: dto.mayoreoHabilitado ?? false,
+      mayoreoCantidadMinima: dto.mayoreoCantidadMinima ?? null,
+      mayoreoPrecioPorPieza: dto.mayoreoPrecioPorPieza ?? null,
     });
+
+    this.validarMayoreo(nuevo);
 
     try {
       const guardado = await this.productos.save(nuevo);
@@ -82,7 +87,42 @@ export class VendorProductsService {
     }
 
     Object.assign(producto, resto);
+    this.validarMayoreo(producto);
     return aProductoPlano(await this.productos.save(producto));
+  }
+
+  // Autoritativa del lado servidor (no basta con el DTO): en un PATCH parcial
+  // el vendedor puede mandar solo `mayoreoPrecioPorPieza` sin reenviar `precio`,
+  // así que la comparación real solo se puede hacer aquí, contra el `producto`
+  // YA fusionado con sus valores actuales en BD (ver actualizar() arriba) — un
+  // ValidateIf en el DTO no tiene forma de ver el precio vigente en ese caso.
+  private validarMayoreo(producto: Producto): void {
+    if (!producto.mayoreoHabilitado) {
+      return;
+    }
+    if (producto.mayoreoCantidadMinima == null || producto.mayoreoPrecioPorPieza == null) {
+      throw new BadRequestException(
+        'Si habilitas el precio de mayoreo, indica la cantidad mínima de piezas y el precio por pieza.',
+      );
+    }
+    if (
+      !Number.isInteger(producto.mayoreoCantidadMinima) ||
+      producto.mayoreoCantidadMinima < 2
+    ) {
+      throw new BadRequestException(
+        'La cantidad mínima de mayoreo debe ser un entero mayor a 1.',
+      );
+    }
+    if (producto.mayoreoPrecioPorPieza <= 0) {
+      throw new BadRequestException(
+        'El precio de mayoreo debe ser mayor a 0.',
+      );
+    }
+    if (producto.mayoreoPrecioPorPieza >= producto.precio) {
+      throw new BadRequestException(
+        'El precio de mayoreo debe ser menor al precio normal.',
+      );
+    }
   }
 
   async eliminar(id: string): Promise<void> {

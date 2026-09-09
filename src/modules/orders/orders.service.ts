@@ -19,6 +19,10 @@ import type { AuthenticatedUser } from '../../common/interfaces/authenticated-us
 import { OffersService } from '../offers/offers.service';
 import { ShippingService } from '../shipping/shipping.service';
 import { CrearPedidoDto } from './dto/crear-pedido.dto';
+import {
+  agruparCantidadesPorProducto,
+  resolverPrecioUnitario,
+} from './mayoreo-precio.util';
 
 @Injectable()
 export class OrdersService {
@@ -85,13 +89,30 @@ export class OrdersService {
     // aplica la oferta vigente — así nadie puede comprar a precio inventado ni
     // a precio base ignorando un descuento activo.
     const ofertasVigentes = await this.offersService.obtenerOfertasVigentes();
+
+    // Mayoreo (por producto, un solo nivel — ver entities/producto.entity.ts):
+    // el mínimo se evalúa sumando TODAS las tallas/colores de un mismo
+    // producto en este pedido, nunca por línea individual, así que hay que
+    // agrupar por productoId ANTES de fijar precioUnitario. Se calcula aquí
+    // (a partir de las cantidades reales que el propio comprador está
+    // pidiendo) y nunca a partir de nada que mande el frontend: no hay forma
+    // de manipular esto vía HTTP directo sin de verdad pedir esa cantidad
+    // (ver mayoreo-precio.util.ts y su spec para el detalle y las pruebas).
+    const cantidadPorProducto = agruparCantidadesPorProducto(dto.items);
+
     const lineas = dto.items.map((item) => {
       const producto = productosPorId.get(item.productoId)!;
-      const precio = this.offersService.calcularPrecioConOfertas(
+      const precioConOferta = this.offersService.calcularPrecioConOfertas(
         producto,
         ofertasVigentes,
+      ).precioFinal;
+      const precioUnitario = resolverPrecioUnitario(
+        producto,
+        cantidadPorProducto.get(item.productoId)!,
+        precioConOferta,
       );
-      return { item, producto, precioUnitario: precio.precioFinal };
+
+      return { item, producto, precioUnitario };
     });
 
     const subtotal =

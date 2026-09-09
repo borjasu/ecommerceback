@@ -91,6 +91,34 @@ export class Producto {
   @Column({ type: 'boolean', default: false })
   destacado: boolean;
 
+  // Precio de mayoreo: opcional y por producto (nunca global ni por
+  // categoría). El mínimo se evalúa sumando TODAS las tallas/colores de este
+  // mismo producto en un pedido (no por línea individual), y al alcanzarlo el
+  // precio de mayoreo aplica a TODAS esas piezas, no solo al excedente — un
+  // solo nivel, sin escalones (ver OrdersService.crear, que es quien calcula
+  // esto de forma autoritativa). mayoreoCantidadMinima/mayoreoPrecioPorPieza
+  // se conservan en BD aunque el vendedor desactive mayoreoHabilitado (mismo
+  // criterio que imagenUrl con "Producto destacado"), para no perder la
+  // configuración si vuelve a activarlo.
+  @Column({ type: 'boolean', name: 'mayoreo_habilitado', default: false })
+  mayoreoHabilitado: boolean;
+
+  @Column({ type: 'int', name: 'mayoreo_cantidad_minima', nullable: true })
+  mayoreoCantidadMinima: number | null;
+
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    name: 'mayoreo_precio_por_pieza',
+    nullable: true,
+    transformer: {
+      to: (value: number | null) => value,
+      from: (value: string | null) => (value === null ? null : Number(value)),
+    },
+  })
+  mayoreoPrecioPorPieza: number | null;
+
   // Borrado lógico: un producto con pedidos históricos (ItemPedido lo referencia)
   // no se puede borrar físicamente sin romper ese historial, así que "eliminar"
   // del lado vendedor solo pone esto en false. El catálogo público (ProductsService)
