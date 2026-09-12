@@ -55,8 +55,10 @@ export class CrearProductoDto {
   @IsString({ each: true })
   tallasDisponibles: string[];
 
-  // No se valida con @IsUrl estricto: en desarrollo/mock puede venir un data URI
-  // base64 (subida de imagen sin backend de almacenamiento todavía).
+  // No se valida con @IsUrl estricto: sigue llegando como data URI base64
+  // dentro de este mismo JSON (mismo contrato del formulario del vendedor),
+  // VendorProductsService la sube a Cloudinary y reemplaza el valor por la
+  // URL resultante antes de guardar — aquí solo se valida que sea texto.
   @IsString()
   imagenUrl: string;
 

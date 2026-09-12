@@ -5,9 +5,12 @@ import { Producto } from '../../entities';
 import { ColoresService } from '../catalogos/colores.service';
 import { TallasService } from '../catalogos/tallas.service';
 import { CategoriasService } from '../catalogos/categorias.service';
+import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { CrearProductoDto } from './dto/crear-producto.dto';
 import { ActualizarProductoDto } from './dto/actualizar-producto.dto';
 import { aProductoPlano, ProductoPlano } from './producto-con-precio.mapper';
+
+const CARPETA_CLOUDINARY = 'productos';
 
 const CODIGO_VIOLACION_UNIQUE_POSTGRES = '23505';
 
@@ -35,17 +38,20 @@ export class VendorProductsService {
     private readonly coloresService: ColoresService,
     private readonly tallasService: TallasService,
     private readonly categoriasService: CategoriasService,
+    private readonly cloudinary: CloudinaryService,
   ) {}
 
   async crear(dto: CrearProductoDto): Promise<ProductoPlano> {
-    const [colores, tallas] = await Promise.all([
+    const [colores, tallas, imagenUrl] = await Promise.all([
       this.coloresService.resolverActivosPorNombre(dto.coloresDisponibles),
       this.tallasService.resolverActivosPorNombre(dto.tallasDisponibles),
+      this.resolverImagenUrl(dto.imagenUrl),
       this.categoriasService.existeOFallar(dto.categoria),
     ]);
 
     const nuevo = this.productos.create({
       ...dto,
+      imagenUrl,
       coloresDisponibles: colores,
       tallasDisponibles: tallas,
       sku: this.generarSku(dto.categoria),
@@ -78,7 +84,7 @@ export class VendorProductsService {
     dto: ActualizarProductoDto,
   ): Promise<ProductoPlano> {
     const producto = await this.obtenerOFallar(id);
-    const { coloresDisponibles, tallasDisponibles, ...resto } = dto;
+    const { coloresDisponibles, tallasDisponibles, imagenUrl, ...resto } = dto;
 
     if (coloresDisponibles) {
       producto.coloresDisponibles =
@@ -90,6 +96,9 @@ export class VendorProductsService {
     }
     if (dto.categoria) {
       await this.categoriasService.existeOFallar(dto.categoria);
+    }
+    if (imagenUrl !== undefined) {
+      producto.imagenUrl = await this.resolverImagenUrl(imagenUrl);
     }
 
     Object.assign(producto, resto);
@@ -151,6 +160,24 @@ export class VendorProductsService {
       throw new NotFoundException('Producto no encontrado.');
     }
     return producto;
+  }
+
+  // El DTO sigue aceptando la imagen general como data URI base64 dentro del
+  // mismo JSON (mismo contrato que ya usa el formulario del vendedor, ver
+  // mis-productos.component.ts) — pero ya no se guarda esa base64 tal cual en
+  // la columna (bloataba la fila y no sobrevive a nada tipo CDN); si es un
+  // data URI se sube a Cloudinary y se guarda la URL resultante. Si ya es una
+  // URL (el placeholder picsum.photos, o una imagen que no cambió en un
+  // PATCH), se deja pasar tal cual: no hay nada que subir de nuevo.
+  private async resolverImagenUrl(imagenUrl: string): Promise<string> {
+    if (!this.cloudinary.esDataUriDeImagen(imagenUrl)) {
+      return imagenUrl;
+    }
+    const { url } = await this.cloudinary.subirDataUri(
+      imagenUrl,
+      CARPETA_CLOUDINARY,
+    );
+    return url;
   }
 
   private generarSku(categoria: string): string {

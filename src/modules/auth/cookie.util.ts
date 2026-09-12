@@ -8,10 +8,24 @@ const MS_POR_DIA = 24 * MS_POR_HORA;
 
 function opcionesBase(config: ConfigService): CookieOptions {
   const dominio = config.get<string>('COOKIE_DOMAIN');
+  // Configurable por entorno (default 'lax', ver env.validation.ts) en vez de
+  // 'strict' fijo: mientras frontend (Vercel) y backend (Railway) no
+  // compartan dominio propio, son sites distintos para el navegador y
+  // 'strict' (igual que 'lax') haría que la cookie de sesión nunca viajara en
+  // esas peticiones cross-site — el login parecería funcionar pero ninguna
+  // petición protegida posterior la traería. Railway debe tener
+  // COOKIE_SAME_SITE=none (exige secure:true, ya garantizado abajo en
+  // producción) hasta que haya un dominio propio compartido (ej.
+  // app.frankjeans.com + api.frankjeans.com), momento en el que debe volver
+  // a 'strict'.
+  const sameSite = config.get<string>('COOKIE_SAME_SITE') as
+    | 'strict'
+    | 'lax'
+    | 'none';
   return {
     httpOnly: true,
     secure: config.get<string>('NODE_ENV') === 'production',
-    sameSite: 'strict',
+    sameSite,
     path: '/',
     ...(dominio ? { domain: dominio } : {}),
   };

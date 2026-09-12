@@ -1,10 +1,8 @@
-import { join } from 'path';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
-import { ServeStaticModule } from '@nestjs/serve-static';
 import { AppController } from './app.controller';
 import { envValidationSchema } from './config/env.validation';
 import { DatabaseModule } from './database/database.module';
@@ -55,14 +53,6 @@ import { ContactModule } from './modules/contact/contact.module';
       }),
     }),
     ScheduleModule.forRoot(),
-    // Sirve las fotos por color subidas por el vendedor
-    // (uploads/productos-colores/, ver ProductoColorImagenesService) bajo
-    // /uploads/... — sigue sin haber backend de subida de archivos general
-    // (ver src/main.ts): esto es únicamente para esas fotos.
-    ServeStaticModule.forRoot({
-      rootPath: join(process.cwd(), 'uploads'),
-      serveRoot: '/uploads',
-    }),
     DatabaseModule,
     AuthModule,
     UsersModule,

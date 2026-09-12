@@ -22,6 +22,20 @@ export const envValidationSchema = Joi.object({
 
   COOKIE_DOMAIN: Joi.string().allow('').optional(),
 
+  // Mientras frontend (Vercel) y backend (Railway) vivan en dominios
+  // registrables distintos (*.vercel.app / *.up.railway.app, sin dominio
+  // propio todavía), la cookie de sesión es cross-site para el navegador:
+  // 'strict' (y también 'lax') nunca viajaría en esas peticiones y el login
+  // parecería funcionar pero no persistiría. Por eso el default es 'lax' aquí
+  // (sigue sirviendo para desarrollo local, mismo-site) pero Railway debe
+  // tener 'none' explícito mientras dure ese esquema — 'none' exige
+  // secure:true siempre, lo cual ya se cumple en producción (ver
+  // cookie.util.ts, secure depende de NODE_ENV==='production'). Cuando
+  // frontend y backend compartan dominio propio (ej. app.frankjeans.com +
+  // api.frankjeans.com, mismo site aunque sean subdominios distintos), volver
+  // a 'strict' en Railway.
+  COOKIE_SAME_SITE: Joi.string().valid('strict', 'lax', 'none').default('lax'),
+
   CORS_ORIGIN: Joi.string().required(),
 
   // URLs base propias (no de Mercado Pago) — se usan para armar back_urls y
@@ -30,8 +44,12 @@ export const envValidationSchema = Joi.object({
   FRONTEND_URL: Joi.string().uri().default('http://localhost:4200'),
   BACKEND_URL: Joi.string().uri().default('http://localhost:3000'),
 
+  // MERCADOPAGO_PUBLIC_KEY NO va aquí: ningún código del backend la lee, es
+  // una credencial pensada para viajar al cliente (inicializa el SDK JS del
+  // Payment Brick) — vive como environment.mercadoPagoPublicKey en el
+  // frontend. Exigirla aquí solo hacía fallar el arranque por una variable
+  // que el backend nunca usa.
   MERCADOPAGO_ACCESS_TOKEN: Joi.string().required(),
-  MERCADOPAGO_PUBLIC_KEY: Joi.string().required(),
   MERCADOPAGO_WEBHOOK_SECRET: Joi.string().required(),
 
   SKYDROPX_CLIENT_ID: Joi.string().required(),
@@ -73,4 +91,13 @@ export const envValidationSchema = Joi.object({
   THROTTLE_LIMIT: Joi.number().default(100),
   THROTTLE_AUTH_TTL: Joi.number().default(60000),
   THROTTLE_AUTH_LIMIT: Joi.number().default(5),
+
+  // Almacenamiento real de imágenes de producto (ver CloudinaryService) — el
+  // filesystem de Railway es efímero por deploy, así que ya no se escriben a
+  // disco (fs.writeFile) ni la foto general del producto ni las fotos por
+  // color. Sin estas tres, el backend no arranca (igual que sin
+  // DATABASE_URL): no hay modo degradado a disco local en producción.
+  CLOUDINARY_CLOUD_NAME: Joi.string().required(),
+  CLOUDINARY_API_KEY: Joi.string().required(),
+  CLOUDINARY_API_SECRET: Joi.string().required(),
 });

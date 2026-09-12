@@ -15,11 +15,11 @@ import { Producto } from './producto.entity';
 // talla+color+stock (eso hoy solo existe simulado en el frontend), así que
 // esta tabla se mantiene deliberadamente desacoplada del catálogo Color —
 // el vendedor nombra el color libremente (ej. "Verde olivo") sin depender de
-// que exista un registro correspondiente en `colores`. Un archivo de imagen en
-// disco (uploads/productos-colores/<id>.<ext>) respalda cada fila; por eso el
-// borrado es físico (ver ProductoColorImagenesService.eliminar), no lógico
-// como el resto del dominio: no hay pedidos históricos que referencien esto,
-// es una foto que el vendedor puede volver a subir si la borra por error.
+// que exista un registro correspondiente en `colores`. Cloudinary respalda
+// cada fila (ver CloudinaryService); por eso el borrado es físico (ver
+// ProductoColorImagenesService.eliminar), no lógico como el resto del
+// dominio: no hay pedidos históricos que referencien esto, es una foto que
+// el vendedor puede volver a subir si la borra por error.
 @Entity('producto_color_imagenes')
 export class ProductoColorImagen {
   @PrimaryGeneratedColumn('uuid')
@@ -40,6 +40,17 @@ export class ProductoColorImagen {
 
   @Column({ type: 'varchar', name: 'imagen_url' })
   imagenUrl: string;
+
+  // public_id de Cloudinary — necesario para poder borrar la imagen del
+  // storage (destroy() exige el public_id, no se puede derivar confiablemente
+  // de la URL). Nullable: filas creadas antes de esta migración (con el
+  // fs.writeFile viejo) no tienen uno — ver ProductoColorImagenesService.eliminar.
+  @Column({
+    type: 'varchar',
+    name: 'imagen_public_id',
+    nullable: true,
+  })
+  imagenPublicId: string | null;
 
   @Column({ type: 'timestamptz', name: 'creado_en', default: () => 'now()' })
   creadoEn: Date;

@@ -24,8 +24,18 @@ import type { AuthenticatedUser } from '../../common/interfaces/authenticated-us
 // Todas sobreescriben el throttler "default" para SU ruta específica (ver
 // nota en app.module.ts) — cada una tiene su propio contador aislado por
 // handler, así que nunca compiten por cupo entre sí.
+//
+// @Throttle() exige valores literales evaluados al cargar el módulo (es
+// metadata de decorador, corre antes de que exista el contenedor de DI) —
+// por eso se lee process.env directo aquí en vez de ConfigService, igual que
+// hace src/database/data-source.ts para el mismo tipo de restricción. Los
+// defaults (5/60000) igualan lo que antes estaba fijo, así que sin las env
+// vars el comportamiento no cambia.
 const THROTTLE_CREDENCIALES = {
-  default: { limit: 5, ttl: 60000 },
+  default: {
+    limit: Number(process.env.THROTTLE_AUTH_LIMIT) || 5,
+    ttl: Number(process.env.THROTTLE_AUTH_TTL) || 60000,
+  },
 };
 
 // /auth/refresh lo dispara automáticamente el interceptor de refresco del
