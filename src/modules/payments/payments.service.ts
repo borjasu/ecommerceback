@@ -1,4 +1,5 @@
 import {
+  BadGatewayException,
   BadRequestException,
   Injectable,
   Logger,
@@ -90,36 +91,51 @@ export class PaymentsService {
     const usuario = await this.usuarios.findOne({ where: { id: usuarioId } });
     const frontendUrl = this.config.get<string>('FRONTEND_URL')!;
 
-    const preferencia = await this.preferenceClient.create({
-      body: {
-        items: pedido.items.map((item) => ({
-          id: item.productoId,
-          title: item.producto.nombre,
-          quantity: item.cantidad,
-          unit_price: item.precioUnitario,
-          currency_id: 'MXN',
-        })),
-        shipments: {
-          cost: pedido.costoEnvio,
-          mode: 'not_specified',
+    let preferencia: Awaited<ReturnType<Preference['create']>>;
+    try {
+      preferencia = await this.preferenceClient.create({
+        body: {
+          items: pedido.items.map((item) => ({
+            id: item.productoId,
+            title: item.producto.nombre,
+            quantity: item.cantidad,
+            unit_price: item.precioUnitario,
+            currency_id: 'MXN',
+          })),
+          shipments: {
+            cost: pedido.costoEnvio,
+            mode: 'not_specified',
+          },
+          payer: {
+            name: usuario?.nombre,
+            email: usuario?.email,
+          },
+          // numeroPedido, no pedido.id: es lo que procesarWebhook y
+          // verificarYActualizarPorPaymentId ya usan para correlacionar un pago
+          // de Mercado Pago con su Pedido — mismo criterio en toda la app.
+          external_reference: pedido.numeroPedido,
+          back_urls: {
+            success: `${frontendUrl}/cuenta/pedidos`,
+            pending: `${frontendUrl}/cuenta/pedidos`,
+            failure: `${frontendUrl}/checkout`,
+          },
+          notification_url: `${this.config.get<string>('BACKEND_URL')}/pagos/webhook`,
         },
-        payer: {
-          name: usuario?.nombre,
-          email: usuario?.email,
-        },
-        // numeroPedido, no pedido.id: es lo que procesarWebhook y
-        // verificarYActualizarPorPaymentId ya usan para correlacionar un pago
-        // de Mercado Pago con su Pedido — mismo criterio en toda la app.
-        external_reference: pedido.numeroPedido,
-        back_urls: {
-          success: `${frontendUrl}/cuenta/pedidos`,
-          pending: `${frontendUrl}/cuenta/pedidos`,
-          failure: `${frontendUrl}/checkout`,
-        },
-        notification_url: `${this.config.get<string>('BACKEND_URL')}/pagos/webhook`,
-      },
-      requestOptions: { idempotencyKey: pedido.id },
-    });
+        // pedido.id tal cual (a diferencia de procesar(), donde la key SÍ
+        // varía por intento): esto solo describe la Preference que inicializa
+        // el Brick (items/monto), nunca cobra nada, y esos datos no cambian
+        // entre reintentos del mismo pedido — no hace falta una key distinta.
+        requestOptions: { idempotencyKey: pedido.id },
+      });
+    } catch (error) {
+      this.logger.error(
+        `Pedido ${pedido.numeroPedido}: Mercado Pago no pudo crear la preferencia — ${this.describirErrorMp(error)}`,
+        error instanceof Error ? error.stack : undefined,
+      );
+      throw new BadGatewayException(
+        'No se pudo iniciar el pago con Mercado Pago. Intenta de nuevo en unos segundos.',
+      );
+    }
 
     if (!preferencia.id) {
       this.logger.error(
@@ -168,27 +184,67 @@ export class PaymentsService {
       );
     }
 
-    const pagoCreado = await this.paymentClient.create({
-      body: {
-        // El propio pedido.total, no dto.transaction_amount — ya se validó
-        // arriba que coinciden, pero la fuente de verdad para el cobro real
-        // sigue siendo la base de datos, nunca el body del request.
-        transaction_amount: pedido.total,
-        token: dto.token,
-        installments: dto.installments ?? 1,
-        payment_method_id: dto.payment_method_id,
-        issuer_id: dto.issuer_id ? Number(dto.issuer_id) : undefined,
-        external_reference: pedido.numeroPedido,
-        description: `Frank Jeans — Pedido ${pedido.numeroPedido}`,
-        payer: {
-          email: dto.payer.email,
-          identification: dto.payer.identification,
-          first_name: dto.payer.first_name,
-          last_name: dto.payer.last_name,
+    // Log de entrada: qué pedido se va a cobrar y con qué método, ANTES de
+    // llamar a Mercado Pago — si la llamada de abajo revienta o el proceso
+    // muere a medias, ya queda evidencia de qué se intentó. Nunca se loguea
+    // `dto.token` (token de un solo uso que ya tokenizó el Payment Brick en
+    // el frontend, equivalente a loguear la tarjeta) ni `dto.payer.identification`
+    // (dato personal del comprador) — solo el identificador del pedido y el
+    // método elegido, que ya son suficientes para correlacionar en los logs.
+    this.logger.log(
+      `Pedido ${pedido.numeroPedido}: enviando cobro a Mercado Pago (payment_method_id=${dto.payment_method_id}, installments=${dto.installments ?? 1}).`,
+    );
+
+    let pagoCreado: Awaited<ReturnType<Payment['create']>>;
+    try {
+      pagoCreado = await this.paymentClient.create({
+        body: {
+          // El propio pedido.total, no dto.transaction_amount — ya se validó
+          // arriba que coinciden, pero la fuente de verdad para el cobro real
+          // sigue siendo la base de datos, nunca el body del request.
+          transaction_amount: pedido.total,
+          token: dto.token,
+          installments: dto.installments ?? 1,
+          payment_method_id: dto.payment_method_id,
+          issuer_id: dto.issuer_id ? Number(dto.issuer_id) : undefined,
+          external_reference: pedido.numeroPedido,
+          description: `Frank Jeans — Pedido ${pedido.numeroPedido}`,
+          payer: {
+            email: dto.payer.email,
+            identification: dto.payer.identification,
+            first_name: dto.payer.first_name,
+            last_name: dto.payer.last_name,
+          },
         },
-      },
-      requestOptions: { idempotencyKey: pedido.id },
-    });
+        // pedido.id + token/payment_method_id, NO solo pedido.id: si el
+        // comprador reintenta con otra tarjeta tras un rechazo ("Intentar de
+        // nuevo" en checkout.component.ts), esta llamada debe tener una key
+        // distinta a la del intento anterior — si no, Mercado Pago la trata
+        // como la MISMA solicitud y devolvería el resultado cacheado del
+        // primer intento (rechazado) en vez de cobrar la tarjeta nueva. Un
+        // reintento genuino con el MISMO token (p. ej. doble submit por un
+        // reintento de red del propio navegador) sí conserva la misma key,
+        // que es justamente el caso que la idempotencia debe deduplicar.
+        requestOptions: {
+          idempotencyKey: `${pedido.id}:${dto.token ?? dto.payment_method_id}`,
+        },
+      });
+    } catch (error) {
+      // El cliente REST del SDK de Mercado Pago (RestClient.fetch) hace
+      // `throw await response.json()` ante cualquier respuesta no-2xx — o sea
+      // que la mayoría de estos catches reciben el objeto de error de
+      // Mercado Pago tal cual (no una instancia de Error, sin stack), y solo
+      // un fallo de red/timeout real (AbortError, fetch failed) sí trae
+      // stack. Se loguean ambos casos completos para tener evidencia real la
+      // próxima vez que esto pase, en vez de tener que reproducirlo a ciegas.
+      this.logger.error(
+        `Pedido ${pedido.numeroPedido}: Mercado Pago no pudo procesar el cobro (payment_method_id=${dto.payment_method_id}) — ${this.describirErrorMp(error)}`,
+        error instanceof Error ? error.stack : undefined,
+      );
+      throw new BadGatewayException(
+        'No se pudo procesar el pago con Mercado Pago. Intenta de nuevo en unos segundos.',
+      );
+    }
 
     if (!pagoCreado.id) {
       throw new BadRequestException('Mercado Pago no devolvió un pago válido.');
@@ -216,14 +272,30 @@ export class PaymentsService {
       return { resultado: 'pendiente' };
     }
 
-    const pedidoActualizado = await this.verificarYActualizarPorPaymentId(
-      String(pagoCreado.id),
-    );
-    return {
-      resultado: aResultadoPago(
-        pedidoActualizado?.estadoActualEnMp ?? pagoCreado.status,
-      ),
-    };
+    try {
+      const pedidoActualizado = await this.verificarYActualizarPorPaymentId(
+        String(pagoCreado.id),
+      );
+      return {
+        resultado: aResultadoPago(
+          pedidoActualizado?.estadoActualEnMp ?? pagoCreado.status,
+        ),
+      };
+    } catch (error) {
+      // El pago YA se creó en Mercado Pago (pagoCreado.id existe) — lo que
+      // falló es la doble verificación posterior (otra llamada de red a MP)
+      // o la escritura en la BD. No hay que devolverle un 500 al comprador
+      // por esto: el webhook (mismo método, ver su docstring) es la fuente
+      // de verdad definitiva y va a terminar de reflejar el estado real del
+      // pedido en cuanto Mercado Pago lo notifique. Se responde 'pendiente'
+      // (nunca 'aprobado' sin que la BD realmente lo confirme) para no
+      // adelantar al frontend un estado que todavía no se pudo persistir.
+      this.logger.error(
+        `Pedido ${pedido.numeroPedido}: el pago ${pagoCreado.id} se creó en Mercado Pago (status=${pagoCreado.status}) pero no se pudo verificar/actualizar el pedido después — ${this.describirErrorMp(error)}`,
+        error instanceof Error ? error.stack : undefined,
+      );
+      return { resultado: 'pendiente' };
+    }
   }
 
   async procesarWebhook(params: {
@@ -278,9 +350,25 @@ export class PaymentsService {
     pedidoId: string;
     estadoActualEnMp: string | undefined;
   } | null> {
-    const pagoVerificado = await this.paymentClient.get({
-      id: mercadopagoPaymentId,
-    });
+    let pagoVerificado: Awaited<ReturnType<Payment['get']>>;
+    try {
+      pagoVerificado = await this.paymentClient.get({
+        id: mercadopagoPaymentId,
+      });
+    } catch (error) {
+      // Se loguea aquí (con el paymentId a mano, antes de saber a qué pedido
+      // corresponde) y se vuelve a lanzar tal cual: quien llama a este método
+      // decide qué hacer con el fallo. El webhook (procesarWebhook) debe
+      // dejarlo propagar sin capturarlo — un 500 de vuelta a Mercado Pago es
+      // lo que hace que su sistema reintente la notificación más tarde; si se
+      // lo tragara aquí, Mercado Pago daría por entregado un webhook que en
+      // realidad nunca actualizó el pedido.
+      this.logger.error(
+        `No se pudo verificar el pago ${mercadopagoPaymentId} contra la API de Mercado Pago — ${this.describirErrorMp(error)}`,
+        error instanceof Error ? error.stack : undefined,
+      );
+      throw error;
+    }
     const numeroPedido = pagoVerificado.external_reference;
 
     if (!numeroPedido) {
@@ -307,11 +395,46 @@ export class PaymentsService {
         { id: pedido.id },
         { estadoPago: EstadoPago.PAGADO },
       );
+    } else if (
+      pagoVerificado.status === 'rejected' ||
+      pagoVerificado.status === 'cancelled'
+    ) {
+      // Explícito y distinto de PENDIENTE: el comprador sí intentó pagar y
+      // Mercado Pago lo rechazó, no es que todavía no pague (p. ej. un
+      // ticket OXXO en espera). No es un estado terminal — un pedido
+      // RECHAZADO puede volver a pasar por aquí y terminar en PAGADO si el
+      // comprador reintenta con otro método/tarjeta (ver
+      // checkout.component.ts del frontend, botón "Intentar de nuevo").
+      await this.pedidos.update(
+        { id: pedido.id },
+        { estadoPago: EstadoPago.RECHAZADO },
+      );
     }
-    // rejected/cancelled/pending: EstadoPago no tiene un valor "rechazado" propio
-    // (solo pendiente|pagado|reembolsado), así que se deja como pendiente —
-    // el módulo vendedor decide manualmente si reintentar o cancelar el pedido.
+    // pending: se deja como PENDIENTE (default) — sigue esperando
+    // confirmación (p. ej. ticket OXXO todavía no pagado).
 
     return { pedidoId: pedido.id, estadoActualEnMp: pagoVerificado.status };
+  }
+
+  /**
+   * Normaliza cualquier error que puedan lanzar `paymentClient.create`/`.get`
+   * a un string logueable. El SDK de Mercado Pago (RestClient.fetch, ver
+   * mercadopago/dist/utils/restClient) hace `throw await response.json()`
+   * ante cualquier respuesta no-2xx — el objeto que llega aquí normalmente
+   * NO es una instancia de Error (no tiene `.stack`), sino el body de error
+   * de Mercado Pago tal cual (`{ message, error, status, cause }`). Un fallo
+   * real de red/timeout (AbortError, "fetch failed") sí es un Error. Nunca
+   * incluye datos de tarjeta: Mercado Pago no los devuelve en sus respuestas
+   * de error, la tokenización ya ocurrió en el frontend.
+   */
+  private describirErrorMp(error: unknown): string {
+    if (error instanceof Error) {
+      return error.message;
+    }
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return String(error);
+    }
   }
 }

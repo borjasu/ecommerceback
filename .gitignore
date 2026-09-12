@@ -3,6 +3,11 @@
 /node_modules
 /build
 
+# imágenes generadas por RecoloreoService (ver src/modules/products/recoloreo/) —
+# artefactos regenerables, no se versionan; .gitkeep mantiene la carpeta en git.
+/uploads/*
+!/uploads/.gitkeep
+
 # Logs
 logs
 *.log

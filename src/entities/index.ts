@@ -1,6 +1,8 @@
 export * from './usuario.entity';
 export * from './producto.entity';
+export * from './producto-color-imagen.entity';
 export * from './direccion.entity';
+export * from './codigo-postal.entity';
 export * from './favorito.entity';
 export * from './oferta.entity';
 export * from './pedido.entity';
@@ -8,6 +10,7 @@ export * from './item-pedido.entity';
 export * from './pedido-auditoria.entity';
 export * from './color.entity';
 export * from './talla.entity';
+export * from './categoria.entity';
 export * from './mensaje-contacto.entity';
 export * from './datos-envio.embeddable';
 export * from './info-envio.embeddable';

@@ -5,6 +5,7 @@ import {
   Usuario,
   Producto,
   Direccion,
+  CodigoPostal,
   Favorito,
   Oferta,
   Pedido,
@@ -12,7 +13,9 @@ import {
   PedidoAuditoria,
   Color,
   Talla,
+  Categoria,
   MensajeContacto,
+  ProductoColorImagen,
 } from '../entities';
 
 @Module({
@@ -27,6 +30,7 @@ import {
           Usuario,
           Producto,
           Direccion,
+          CodigoPostal,
           Favorito,
           Oferta,
           Pedido,
@@ -34,7 +38,9 @@ import {
           PedidoAuditoria,
           Color,
           Talla,
+          Categoria,
           MensajeContacto,
+          ProductoColorImagen,
         ],
         migrations: ['dist/database/migrations/*.js'],
         migrationsRun: false,

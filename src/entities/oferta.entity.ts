@@ -5,7 +5,7 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { AplicaA, Audiencia, Categoria, TipoDescuento } from './enums';
+import { AplicaA, Audiencia, TipoDescuento } from './enums';
 import { Producto } from './producto.entity';
 
 /**
@@ -55,13 +55,13 @@ export class Oferta {
   @Column({ type: 'uuid', name: 'producto_id', nullable: true })
   productoId: string | null;
 
-  @Column({
-    type: 'enum',
-    enum: Categoria,
-    enumName: 'categoria_enum',
-    nullable: true,
-  })
-  categoria: Categoria | null;
+  // Ya NO es un enum tipado (ver Producto.categoria) — snapshot de texto
+  // libre, SIN FK a `categorias`: si la categoría se borra o renombra
+  // después, esta oferta simplemente deja de coincidir con algún producto en
+  // vez de bloquear el borrado de la categoría (mismo criterio que
+  // ItemPedido.talla/color con Talla/Color).
+  @Column({ type: 'varchar', length: 60, nullable: true })
+  categoria: string | null;
 
   @Column({
     type: 'enum',

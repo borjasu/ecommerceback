@@ -10,7 +10,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-import { Audiencia, Categoria } from '../../../entities';
+import { Audiencia } from '../../../entities';
 
 const LIMITE_MAXIMO = 50;
 const LIMITE_DEFAULT = 20;
@@ -20,13 +20,14 @@ export class ListarProductosQueryDto {
   @IsEnum(Audiencia)
   audiencia?: Audiencia;
 
+  // Categoria/talla/color ya no son enums fijos (ver modules/catalogos) — se
+  // valida solo la forma; un nombre que no exista en el catálogo simplemente
+  // no matchea ningún producto (0 resultados), no un 400.
   @IsOptional()
-  @IsEnum(Categoria)
-  categoria?: Categoria;
+  @IsString()
+  @MaxLength(60)
+  categoria?: string;
 
-  // Talla/color ya no son enums fijos (ver modules/catalogos) — se valida solo
-  // la forma; un nombre que no exista en el catálogo simplemente no matchea
-  // ningún producto (0 resultados), no un 400.
   @IsOptional()
   @IsString()
   @MaxLength(20)

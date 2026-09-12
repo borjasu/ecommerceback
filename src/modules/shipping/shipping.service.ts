@@ -121,16 +121,15 @@ export class ShippingService {
 
     const origen = this.origenTienda();
 
-    // TODO(direccion): Direccion no captura "estado" ni "colonia" (area_level1/
-    // area_level3) por separado, solo ciudad — Skydropx los exige los tres. Por
-    // ahora se reusa `ciudad` como aproximación para ambos; para cotizaciones
-    // exactas por colonia, agregar esos campos a la entidad Direccion.
+    // Direccion ahora captura calle/colonia/municipio/estado por separado
+    // (ver auditoría del prompt de "dirección estructurada + SEPOMEX") — cada
+    // area_level va con el dato real en vez de reusar "ciudad" para los tres.
     const destino: DireccionSkydropx = {
-      street1: direccion.direccion,
+      street1: this.formatearCalle(direccion),
       postal_code: direccion.codigoPostal,
-      area_level1: direccion.ciudad,
-      area_level2: direccion.ciudad,
-      area_level3: direccion.ciudad,
+      area_level1: direccion.estado,
+      area_level2: direccion.municipio,
+      area_level3: direccion.colonia,
       country_code: 'MX',
     };
 
@@ -211,12 +210,18 @@ export class ShippingService {
     };
 
     const origen = this.origenTienda();
+    // El desglose estructurado (calle/colonia/municipio/estado) es nullable
+    // porque pedidos creados ANTES de esta migración no lo tienen — para
+    // esos, único caso donde puede faltar, se cae a los campos legacy
+    // (direccion/ciudad) con la misma aproximación que ya se usaba.
     const destino: DireccionSkydropx = {
-      street1: pedido.datosEnvio.direccion,
+      street1: pedido.datosEnvio.calle
+        ? `${pedido.datosEnvio.calle} ${pedido.datosEnvio.numeroExterior ?? ''}`.trim()
+        : pedido.datosEnvio.direccion,
       postal_code: pedido.datosEnvio.codigoPostal,
-      area_level1: pedido.datosEnvio.ciudad,
-      area_level2: pedido.datosEnvio.ciudad,
-      area_level3: pedido.datosEnvio.ciudad,
+      area_level1: pedido.datosEnvio.estado ?? pedido.datosEnvio.ciudad,
+      area_level2: pedido.datosEnvio.municipio ?? pedido.datosEnvio.ciudad,
+      area_level3: pedido.datosEnvio.colonia ?? pedido.datosEnvio.ciudad,
       country_code: 'MX',
     };
 
@@ -357,6 +362,12 @@ export class ShippingService {
     );
   }
 
+  private formatearCalle(direccion: Direccion): string {
+    return direccion.numeroInterior
+      ? `${direccion.calle} ${direccion.numeroExterior} Int. ${direccion.numeroInterior}`
+      : `${direccion.calle} ${direccion.numeroExterior}`;
+  }
+
   private origenTienda(): DireccionSkydropx {
     return {
       street1: this.config.get<string>('STORE_ORIGIN_STREET')!,
@@ -388,9 +399,7 @@ export class ShippingService {
       servicio: rate.provider_service_name,
       costo: Number(rate.total),
       tiempoEstimado:
-        rate.days != null
-          ? `${rate.days} día(s)`
-          : TIEMPO_ESTIMADO_DESCONOCIDO,
+        rate.days != null ? `${rate.days} día(s)` : TIEMPO_ESTIMADO_DESCONOCIDO,
     }));
   }
 

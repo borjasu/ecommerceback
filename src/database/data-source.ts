@@ -5,6 +5,7 @@ import {
   Usuario,
   Producto,
   Direccion,
+  CodigoPostal,
   Favorito,
   Oferta,
   Pedido,
@@ -12,7 +13,9 @@ import {
   PedidoAuditoria,
   Color,
   Talla,
+  Categoria,
   MensajeContacto,
+  ProductoColorImagen,
 } from '../entities';
 
 config();
@@ -29,6 +32,7 @@ export const AppDataSource = new DataSource({
     Usuario,
     Producto,
     Direccion,
+    CodigoPostal,
     Favorito,
     Oferta,
     Pedido,
@@ -36,7 +40,9 @@ export const AppDataSource = new DataSource({
     PedidoAuditoria,
     Color,
     Talla,
+    Categoria,
     MensajeContacto,
+    ProductoColorImagen,
   ],
   migrations: ['src/database/migrations/*.ts'],
   synchronize: false,

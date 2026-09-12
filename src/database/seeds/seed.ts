@@ -13,6 +13,9 @@ import {
   Talla,
   Usuario,
 } from '../../entities';
+// Nota: `Categoria` aquí es la ENTIDAD del catálogo dinámico (id/nombre/icono/
+// orden, ver entities/categoria.entity.ts), no un enum — Producto.categoria/
+// Oferta.categoria siguen siendo strings planos abajo, igual que antes.
 import { AplicaA, TipoDescuento } from '../../entities/enums';
 
 const BCRYPT_COST_FACTOR = 12;
@@ -37,12 +40,22 @@ const TALLAS_SEED: Array<Omit<Talla, 'id'>> = [
   { nombre: 'XL', orden: 4, activo: true },
 ];
 
+// Mismos valores/orden que ya sembró la migración AgregarCategoriasDinamicas
+// — se listan también aquí (idempotente, como colores/tallas arriba) por si
+// este script corre contra una base sin esa migración todavía.
+const CATEGORIAS_SEED: Array<Omit<Categoria, 'id'>> = [
+  { nombre: 'pantalon', icono: 'pantalon', orden: 1 },
+  { nombre: 'playera', icono: 'playera', orden: 2 },
+  { nombre: 'camisa', icono: 'camisa', orden: 3 },
+  { nombre: 'bermuda', icono: 'bermuda', orden: 4 },
+];
+
 interface ProductoSeedData {
   sku: string;
   nombre: string;
   descripcion: string;
   precio: number;
-  categoria: Categoria;
+  categoria: string;
   audiencia: Audiencia;
   coloresNombres: string[];
   tallasNombres: string[];
@@ -59,7 +72,7 @@ const PRODUCTOS_SEED: ProductoSeedData[] = [
     descripcion:
       'Pantalón de corte slim en gabardina de algodón, ideal para looks formales y de oficina.',
     precio: 899,
-    categoria: Categoria.PANTALON,
+    categoria: 'pantalon',
     audiencia: Audiencia.HOMBRE,
     coloresNombres: ['negro', 'azul'],
     tallasNombres: ['S', 'M', 'L', 'XL'],
@@ -77,7 +90,7 @@ const PRODUCTOS_SEED: ProductoSeedData[] = [
     descripcion:
       'Pantalón chino de algodón con corte recto, un básico versátil para el día a día.',
     precio: 749,
-    categoria: Categoria.PANTALON,
+    categoria: 'pantalon',
     audiencia: Audiencia.NINO,
     coloresNombres: ['beige'],
     tallasNombres: ['M', 'L', 'XL'],
@@ -92,7 +105,7 @@ const PRODUCTOS_SEED: ProductoSeedData[] = [
     descripcion:
       'Pantalón cargo con bolsillos funcionales, tela resistente y ajuste cómodo.',
     precio: 999,
-    categoria: Categoria.PANTALON,
+    categoria: 'pantalon',
     audiencia: Audiencia.HOMBRE,
     coloresNombres: ['gris', 'negro'],
     tallasNombres: ['S', 'M', 'L'],
@@ -107,7 +120,7 @@ const PRODUCTOS_SEED: ProductoSeedData[] = [
     descripcion:
       'Playera de algodón 100% peinado, suave al tacto y de ajuste regular.',
     precio: 349,
-    categoria: Categoria.PLAYERA,
+    categoria: 'playera',
     audiencia: Audiencia.NINO,
     coloresNombres: ['blanco'],
     tallasNombres: ['S', 'M', 'L', 'XL'],
@@ -122,7 +135,7 @@ const PRODUCTOS_SEED: ProductoSeedData[] = [
     descripcion:
       'Playera con estampado exclusivo de temporada, tela premium y acabado suave.',
     precio: 429,
-    categoria: Categoria.PLAYERA,
+    categoria: 'playera',
     audiencia: Audiencia.HOMBRE,
     coloresNombres: ['azul'],
     tallasNombres: ['M', 'L'],
@@ -137,7 +150,7 @@ const PRODUCTOS_SEED: ProductoSeedData[] = [
     descripcion:
       'Playera con cuello en V, corte entallado y tejido transpirable.',
     precio: 379,
-    categoria: Categoria.PLAYERA,
+    categoria: 'playera',
     audiencia: Audiencia.NINO,
     coloresNombres: ['negro', 'blanco'],
     tallasNombres: ['S', 'M', 'L', 'XL'],
@@ -152,7 +165,7 @@ const PRODUCTOS_SEED: ProductoSeedData[] = [
     descripcion:
       'Camisa confeccionada en lino ligero, perfecta para climas cálidos y looks relajados.',
     precio: 1099,
-    categoria: Categoria.CAMISA,
+    categoria: 'camisa',
     audiencia: Audiencia.HOMBRE,
     coloresNombres: ['blanco'],
     tallasNombres: ['S', 'M', 'L'],
@@ -167,7 +180,7 @@ const PRODUCTOS_SEED: ProductoSeedData[] = [
     descripcion:
       'Camisa Oxford de algodón con cuello abotonado, un básico atemporal para el guardarropa.',
     precio: 949,
-    categoria: Categoria.CAMISA,
+    categoria: 'camisa',
     audiencia: Audiencia.NINO,
     coloresNombres: ['azul'],
     tallasNombres: ['S', 'M', 'L', 'XL'],
@@ -182,7 +195,7 @@ const PRODUCTOS_SEED: ProductoSeedData[] = [
     descripcion:
       'Camisa de franela con estampado a cuadros, cálida y de tacto suave.',
     precio: 899,
-    categoria: Categoria.CAMISA,
+    categoria: 'camisa',
     audiencia: Audiencia.HOMBRE,
     coloresNombres: ['cafe'],
     tallasNombres: ['M', 'L', 'XL'],
@@ -197,7 +210,7 @@ const PRODUCTOS_SEED: ProductoSeedData[] = [
     descripcion:
       'Bermuda ligera de secado rápido, ideal para actividades al aire libre.',
     precio: 549,
-    categoria: Categoria.BERMUDA,
+    categoria: 'bermuda',
     audiencia: Audiencia.NINO,
     coloresNombres: ['gris'],
     tallasNombres: ['S', 'M', 'L', 'XL'],
@@ -211,7 +224,7 @@ const PRODUCTOS_SEED: ProductoSeedData[] = [
     nombre: 'Bermuda Denim',
     descripcion: 'Bermuda de mezclilla con corte recto y lavado clásico.',
     precio: 629,
-    categoria: Categoria.BERMUDA,
+    categoria: 'bermuda',
     audiencia: Audiencia.HOMBRE,
     coloresNombres: ['azul'],
     tallasNombres: ['M', 'L'],
@@ -226,7 +239,7 @@ const PRODUCTOS_SEED: ProductoSeedData[] = [
     descripcion:
       'Bermuda tipo cargo con bolsillos laterales y tela resistente.',
     precio: 679,
-    categoria: Categoria.BERMUDA,
+    categoria: 'bermuda',
     audiencia: Audiencia.NINO,
     coloresNombres: ['beige', 'gris'],
     tallasNombres: ['S', 'M', 'L', 'XL'],
@@ -247,6 +260,18 @@ async function seed(): Promise<void> {
   const direccionesRepo = AppDataSource.getRepository(Direccion);
   const coloresRepo = AppDataSource.getRepository(Color);
   const tallasRepo = AppDataSource.getRepository(Talla);
+  const categoriasRepo = AppDataSource.getRepository(Categoria);
+
+  // ---------- Catálogo dinámico: categorías ----------
+  for (const datos of CATEGORIAS_SEED) {
+    const existente = await categoriasRepo.findOne({
+      where: { nombre: datos.nombre },
+    });
+    if (!existente) {
+      await categoriasRepo.save(categoriasRepo.create(datos));
+      console.log(`Categoría creada: ${datos.nombre}`);
+    }
+  }
 
   // ---------- Catálogo dinámico: colores y tallas ----------
   for (const datos of COLORES_SEED) {
@@ -326,9 +351,18 @@ async function seed(): Promise<void> {
         usuarioId: comprador.id,
         alias: 'Casa',
         nombreCompleto: comprador.nombre,
-        direccion: 'Calle 11 Sur 456, Col. Centro',
-        ciudad: 'Puebla',
+        // Colonia/municipio/estado reales del catálogo SEPOMEX para este CP
+        // (ver codigos_postales, sembrado aparte con `npm run
+        // seed:codigos-postales`) — mismos que devolvería GET
+        // /codigos-postales/72000 en el checkout.
+        calle: 'Calle 11 Sur',
+        numeroExterior: '456',
+        numeroInterior: null,
+        colonia: 'Centro',
+        municipio: 'Puebla',
+        estado: 'Puebla',
         codigoPostal: '72000',
+        referencias: null,
         telefono: '2221234567',
         predeterminada: true,
       }),
@@ -347,11 +381,11 @@ async function seed(): Promise<void> {
       producto = await productosRepo.save(
         productosRepo.create({
           ...resto,
-          coloresDisponibles: coloresNombres.map(
-            (nombre) => colorPorNombre.get(nombre)!,
+          coloresDisponibles: coloresNombres.map((nombre) =>
+            colorPorNombre.get(nombre)!,
           ),
-          tallasDisponibles: tallasNombres.map(
-            (nombre) => tallaPorNombre.get(nombre)!,
+          tallasDisponibles: tallasNombres.map((nombre) =>
+            tallaPorNombre.get(nombre)!,
           ),
         }),
       );
@@ -391,7 +425,7 @@ async function seed(): Promise<void> {
       valor: 50,
       aplicaA: AplicaA.CATEGORIA,
       productoId: null,
-      categoria: Categoria.PLAYERA,
+      categoria: 'playera',
       audiencia: null,
       fechaInicio: aFechaSql(hace30Dias),
       fechaFin: aFechaSql(en60Dias),

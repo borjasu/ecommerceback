@@ -1,8 +1,10 @@
+import { join } from 'path';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ServeStaticModule } from '@nestjs/serve-static';
 import { AppController } from './app.controller';
 import { envValidationSchema } from './config/env.validation';
 import { DatabaseModule } from './database/database.module';
@@ -13,6 +15,7 @@ import { ProductsModule } from './modules/products/products.module';
 import { OffersModule } from './modules/offers/offers.module';
 import { CatalogosModule } from './modules/catalogos/catalogos.module';
 import { AddressesModule } from './modules/addresses/addresses.module';
+import { PostalCodesModule } from './modules/postal-codes/postal-codes.module';
 import { FavoritesModule } from './modules/favorites/favorites.module';
 import { ShippingModule } from './modules/shipping/shipping.module';
 import { OrdersModule } from './modules/orders/orders.module';
@@ -52,6 +55,14 @@ import { ContactModule } from './modules/contact/contact.module';
       }),
     }),
     ScheduleModule.forRoot(),
+    // Sirve las fotos por color subidas por el vendedor
+    // (uploads/productos-colores/, ver ProductoColorImagenesService) bajo
+    // /uploads/... — sigue sin haber backend de subida de archivos general
+    // (ver src/main.ts): esto es únicamente para esas fotos.
+    ServeStaticModule.forRoot({
+      rootPath: join(process.cwd(), 'uploads'),
+      serveRoot: '/uploads',
+    }),
     DatabaseModule,
     AuthModule,
     UsersModule,
@@ -59,6 +70,7 @@ import { ContactModule } from './modules/contact/contact.module';
     OffersModule,
     ProductsModule,
     AddressesModule,
+    PostalCodesModule,
     FavoritesModule,
     ShippingModule,
     OrdersModule,

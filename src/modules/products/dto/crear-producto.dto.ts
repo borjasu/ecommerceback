@@ -5,13 +5,15 @@ import {
   IsArray,
   IsBoolean,
   IsEnum,
+  IsInt,
   IsNumber,
   IsOptional,
   IsString,
   Min,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
-import { Audiencia, Categoria, Etiqueta } from '../../../entities';
+import { Audiencia, Etiqueta } from '../../../entities';
 
 export class CrearProductoDto {
   @IsString()
@@ -26,8 +28,13 @@ export class CrearProductoDto {
   @Min(0.01)
   precio: number;
 
-  @IsEnum(Categoria)
-  categoria: Categoria;
+  // Categoria ya no es un enum fijo (ver modules/catalogos): se valida solo
+  // la forma aquí; VendorProductsService confirma que exista de verdad en el
+  // catálogo vigente antes de guardar (mismo criterio que coloresDisponibles/
+  // tallasDisponibles).
+  @IsString()
+  @MinLength(1)
+  categoria: string;
 
   @IsEnum(Audiencia)
   audiencia: Audiencia;
@@ -65,4 +72,24 @@ export class CrearProductoDto {
   @IsOptional()
   @IsBoolean()
   destacado?: boolean;
+
+  // Mayoreo: por producto, opcional, un solo nivel (ver entities/producto.entity.ts).
+  // La comparación mayoreoPrecioPorPieza < precio NO se valida aquí porque en un
+  // PATCH parcial `precio` puede no venir en el body — VendorProductsService la
+  // revalida siempre contra el precio real ya guardado antes de persistir.
+  @IsOptional()
+  @IsBoolean()
+  mayoreoHabilitado?: boolean;
+
+  @ValidateIf((dto: CrearProductoDto) => dto.mayoreoHabilitado === true)
+  @Type(() => Number)
+  @IsInt()
+  @Min(2)
+  mayoreoCantidadMinima?: number;
+
+  @ValidateIf((dto: CrearProductoDto) => dto.mayoreoHabilitado === true)
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0.01)
+  mayoreoPrecioPorPieza?: number;
 }
