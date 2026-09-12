@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ItemPedido, Producto, ProductoColorImagen } from '../../entities';
 import { OffersModule } from '../offers/offers.module';
 import { CatalogosModule } from '../catalogos/catalogos.module';
+import { CloudinaryModule } from '../cloudinary/cloudinary.module';
 import { ProductsController } from './products.controller';
 import { ProductsService } from './products.service';
 import { VendorProductsController } from './vendor-products.controller';
@@ -14,6 +15,7 @@ import { ProductoColorImagenesService } from './producto-color-imagenes.service'
     TypeOrmModule.forFeature([Producto, ItemPedido, ProductoColorImagen]),
     OffersModule,
     CatalogosModule,
+    CloudinaryModule,
   ],
   controllers: [ProductsController, VendorProductsController],
   providers: [ProductsService, VendorProductsService, ProductoColorImagenesService],

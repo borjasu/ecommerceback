@@ -1,5 +1,3 @@
-import { join, extname } from 'path';
-import { promises as fs } from 'fs';
 import { randomUUID } from 'crypto';
 import {
   BadRequestException,
@@ -7,28 +5,28 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Producto, ProductoColorImagen } from '../../entities';
+import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { SubirFotoColorDto } from './dto/subir-foto-color.dto';
 import {
   aProductoColorImagenPlano,
   ProductoColorImagenPlano,
 } from './producto-color-imagen.mapper';
 
-const CARPETA_UPLOADS = join(process.cwd(), 'uploads', 'productos-colores');
+const CARPETA_CLOUDINARY = 'productos-colores';
 
-// mimetype → extensión de archivo. Whitelist explícita (no se confía en
-// file.originalname del cliente para la extensión): mismo criterio que
-// exigir `image/*` en el <input type="file"> del frontend, pero validado
-// también aquí porque ese accept es solo una sugerencia del navegador, no
-// una garantía de lo que realmente llega en el request.
-const EXTENSIONES_PERMITIDAS: Record<string, string> = {
-  'image/jpeg': '.jpg',
-  'image/png': '.png',
-  'image/webp': '.webp',
-};
+// Whitelist explícita de mimetypes (no se confía en file.originalname del
+// cliente): mismo criterio que exigir `image/*` en el <input type="file">
+// del frontend, pero validado también aquí porque ese accept es solo una
+// sugerencia del navegador, no una garantía de lo que realmente llega en el
+// request.
+const MIMETYPES_PERMITIDOS = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+]);
 
 /**
  * CRUD de las fotos por color de un producto: una foto real por color
@@ -44,7 +42,7 @@ export class ProductoColorImagenesService {
     private readonly productos: Repository<Producto>,
     @InjectRepository(ProductoColorImagen)
     private readonly imagenesColores: Repository<ProductoColorImagen>,
-    private readonly config: ConfigService,
+    private readonly cloudinary: CloudinaryService,
   ) {}
 
   async subirFoto(
@@ -58,22 +56,30 @@ export class ProductoColorImagenesService {
     if (!archivo) {
       throw new BadRequestException('Falta la foto del color.');
     }
-    const extension = EXTENSIONES_PERMITIDAS[archivo.mimetype];
-    if (!extension) {
+    if (!MIMETYPES_PERMITIDOS.has(archivo.mimetype)) {
       throw new BadRequestException(
         'Formato de imagen no soportado. Usa JPG, PNG o WEBP.',
       );
     }
 
-    const id = randomUUID();
-    await this.guardarArchivo(id, extension, archivo.buffer);
+    const { url, publicId } = await this.cloudinary.subirBuffer(
+      archivo.buffer,
+      CARPETA_CLOUDINARY,
+    );
 
     const nuevo = this.imagenesColores.create({
-      id,
+      // A diferencia del resto de las tablas del proyecto, esta columna id
+      // NO tiene DEFAULT gen_random_uuid() a nivel de base de datos (ver
+      // ProductoColorImagenes1785583762405) — siempre se generó del lado de
+      // la aplicación. Quitarlo aquí (como se hizo al migrar a Cloudinary)
+      // hace que TypeORM mande DEFAULT en el INSERT y Postgres lo rechace
+      // por NOT NULL.
+      id: randomUUID(),
       productoId,
       nombreColor: dto.nombreColor,
       colorHex: dto.colorHex,
-      imagenUrl: this.construirUrlPublica(id, extension),
+      imagenUrl: url,
+      imagenPublicId: publicId,
     });
     const guardado = await this.imagenesColores.save(nuevo);
     return aProductoColorImagenPlano(guardado);
@@ -89,7 +95,12 @@ export class ProductoColorImagenesService {
       );
     }
 
-    await this.borrarArchivo(entidad);
+    // Filas creadas antes de la migración a Cloudinary no tienen publicId
+    // (venían de fs.writeFile) — no hay nada que borrar del storage en ese
+    // caso, solo la fila.
+    if (entidad.imagenPublicId) {
+      await this.cloudinary.eliminar(entidad.imagenPublicId);
+    }
     await this.imagenesColores.delete({ id: colorId });
   }
 
@@ -120,34 +131,5 @@ export class ProductoColorImagenesService {
         `Ya existe una foto con el nombre "${nombreColor}" para este producto.`,
       );
     }
-  }
-
-  private async guardarArchivo(
-    id: string,
-    extension: string,
-    buffer: Buffer,
-  ): Promise<void> {
-    await fs.mkdir(CARPETA_UPLOADS, { recursive: true });
-    await fs.writeFile(join(CARPETA_UPLOADS, `${id}${extension}`), buffer);
-  }
-
-  private async borrarArchivo(entidad: ProductoColorImagen): Promise<void> {
-    // La extensión real se saca de la propia imagenUrl guardada (puede ser
-    // .jpg/.png/.webp según lo que se subió) en vez de asumir una fija.
-    const nombreArchivo = `${entidad.id}${extname(entidad.imagenUrl)}`;
-    try {
-      await fs.unlink(join(CARPETA_UPLOADS, nombreArchivo));
-    } catch (error) {
-      // ENOENT: el archivo ya no estaba (borrado manual, disco reseteado en
-      // dev, etc.) — no debe impedir borrar el registro de la BD.
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-        throw error;
-      }
-    }
-  }
-
-  private construirUrlPublica(id: string, extension: string): string {
-    const backendUrl = this.config.get<string>('BACKEND_URL');
-    return `${backendUrl}/uploads/productos-colores/${id}${extension}`;
   }
 }
